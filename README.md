@@ -45,6 +45,25 @@ npm run build
 npm start
 ```
 
+## Docker
+
+Create a `.env` file on the server (it is not committed to git):
+
+```bash
+cp .env.example .env   # set ADMIN_PASSWORD and optional MOBYGAMES_API_KEY
+docker compose up -d --build
+```
+
+Compose mounts `./.env` into the container at `/app/.env` and also injects those values as environment variables. The file must exist **on the host** next to `docker-compose.yml` before starting — Docker will not copy it from the image.
+
+```bash
+docker compose logs -f
+docker compose down
+docker compose up -d --build   # after pulling updates
+```
+
+Game journals and uploads persist in the `gametrackr-data` volume.
+
 ## Project layout
 
 ```
