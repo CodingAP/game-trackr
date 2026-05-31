@@ -6,7 +6,7 @@ public/css/
 .env
 *.log
 
-# Runtime image uploads (seed data is committed separately)
+# Runtime image uploads
 backend/data/games/*/images/*
 
 # Removed Vite frontend artifacts

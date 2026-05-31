@@ -71,7 +71,3 @@ Checkbox completion is keyed by a stable hash of the checkbox label text, so pro
 - `#/editor/:slug` — Edit game markdown and upload images
 - `#/viewer/:slug` — View rendered markdown and track completion
 - `#/settings` — Global settings (theme, image viewport)
-
-## Seed data
-
-A sample *Super Mario Bros.* journal is included at `backend/data/games/super-mario-bros/content.md`.

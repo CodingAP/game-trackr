@@ -1,0 +1,16 @@
+services:
+  gametrackr:
+    build: .
+    container_name: gametrackr
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      PORT: 3000
+    volumes:
+      - gametrackr-data:/app/backend/data/games
+
+volumes:
+  gametrackr-data:
