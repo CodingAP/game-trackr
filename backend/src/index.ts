@@ -1,4 +1,4 @@
-import { getLoadedEnvPath, loadEnv } from './loadEnv.js';
+import { loadEnv } from './loadEnv.js';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,11 +37,9 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
   if (!isAuthConfigured()) {
-    const envPath = getLoadedEnvPath();
     console.warn(
-      envPath
-        ? `Warning: ADMIN_PASSWORD is missing or empty (checked ${envPath}). CRUD routes require auth.`
-        : 'Warning: No .env file found. Set ADMIN_PASSWORD in .env for CRUD auth.',
+      'Warning: ADMIN_PASSWORD is missing or empty. CRUD routes require auth. ' +
+        'Set ADMIN_PASSWORD in .env (local dev) or pass it via container environment (Docker).',
     );
   }
 });

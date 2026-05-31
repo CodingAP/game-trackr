@@ -11,7 +11,6 @@ services:
       PORT: 3000
     volumes:
       - gametrackr-data:/app/backend/data/games
-      - ./.env:/app/.env:ro
 
 volumes:
   gametrackr-data:

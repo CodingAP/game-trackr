@@ -54,7 +54,7 @@ cp .env.example .env   # set ADMIN_PASSWORD and optional MOBYGAMES_API_KEY
 docker compose up -d --build
 ```
 
-Compose mounts `./.env` into the container at `/app/.env` and also injects those values as environment variables. The file must exist **on the host** next to `docker-compose.yml` before starting — Docker will not copy it from the image.
+Compose reads `.env` from the project directory via `env_file` and injects those values into the container. You do **not** need a `.env` file inside the image.
 
 ```bash
 docker compose logs -f
@@ -63,6 +63,24 @@ docker compose up -d --build   # after pulling updates
 ```
 
 Game journals and uploads persist in the `gametrackr-data` volume.
+
+### Verify `.env` is loaded
+
+Run these from the repo root (same folder as `docker-compose.yml`):
+
+```bash
+grep ADMIN_PASSWORD .env
+docker compose config | grep ADMIN_PASSWORD
+docker compose run --rm gametrackr sh -c 'test -n "$ADMIN_PASSWORD" && echo OK || echo MISSING'
+```
+
+If the last command prints `MISSING`, recreate the container:
+
+```bash
+docker compose down && docker compose up -d --build
+```
+
+Passwords with `$` or `#` in them are fine — keep them on a single line with no quotes unless the whole value is quoted.
 
 ## Project layout
 

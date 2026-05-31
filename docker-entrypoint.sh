@@ -3,15 +3,15 @@ set -e
 
 DATA_DIR="/app/backend/data/games"
 
-if [ -d /app/.env ]; then
-  echo "ERROR: /app/.env is a directory."
-  echo "Remove it on the host (rm -rf .env) and create a .env file next to docker-compose.yml."
-  exit 1
-fi
-
-if [ ! -f /app/.env ]; then
-  echo "ERROR: .env file not found."
-  echo "Create one on the host: cp .env.example .env"
+if [ -z "${ADMIN_PASSWORD:-}" ]; then
+  echo "ERROR: ADMIN_PASSWORD is not set inside the container."
+  echo ""
+  echo "On the host, check your .env file next to docker-compose.yml:"
+  echo "  grep ADMIN_PASSWORD .env"
+  echo "  docker compose config | grep ADMIN_PASSWORD"
+  echo ""
+  echo "Then recreate the container (restart alone is not enough):"
+  echo "  docker compose down && docker compose up -d --build"
   exit 1
 fi
 
