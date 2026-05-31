@@ -1,0 +1,14 @@
+node_modules/
+dist/
+backend/dist/
+public/js/
+public/css/
+.env
+*.log
+
+# Runtime image uploads (seed data is committed separately)
+backend/data/games/*/images/*
+
+# Removed Vite frontend artifacts
+frontend/dist/
+frontend/node_modules/

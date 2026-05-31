@@ -1,0 +1,37 @@
+{
+  "name": "game-tracking",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build:client": "esbuild frontend/src/main.ts --bundle --outfile=public/js/app.js --format=esm --platform=browser",
+    "build:css": "tailwindcss -i frontend/src/styles/main.css -o public/css/main.css --minify",
+    "build:server": "tsc -p backend/tsconfig.json",
+    "build": "npm run build:css && npm run build:client && npm run build:server",
+    "dev": "npm run build:css && npm run build:client && concurrently -n server,js,css -c blue,green,yellow \"tsx watch --env-file=.env backend/src/index.ts\" \"esbuild frontend/src/main.ts --bundle --outfile=public/js/app.js --format=esm --platform=browser --watch\" \"tailwindcss -i frontend/src/styles/main.css -o public/css/main.css --watch\"",
+    "start": "node --env-file=.env backend/dist/index.js"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.20.2",
+    "@codemirror/commands": "^6.10.3",
+    "@codemirror/lang-markdown": "^6.5.0",
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.43.0",
+    "codemirror": "^6.0.2",
+    "express": "^5.2.1",
+    "marked": "^18.0.4",
+    "multer": "^2.1.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.0",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^25.9.1",
+    "concurrently": "^9.2.1",
+    "esbuild": "^0.25.12",
+    "tailwindcss": "^4.3.0",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}

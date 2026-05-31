@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('game-tracking:theme');
+          if (theme) document.documentElement.dataset.theme = theme;
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>GameTrackr</title>
+    <link rel="stylesheet" href="/css/main.css" />
+  </head>
+  <body>
+    <div id="app" class="min-h-screen">
+      <header class="app-header">
+        <div class="app-header-inner">
+          <a href="#/" class="app-title">GameTrackr</a>
+          <div id="nav-host"></div>
+        </div>
+      </header>
+      <main id="main-content" class="w-full min-w-0 px-3 py-4 sm:px-4 sm:py-8"></main>
+    </div>
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>
