@@ -1,39 +1,70 @@
 import { fetchGames, fetchGameContent, fetchMobyGamesForGame } from '../api/client.js';
 import { renderImportGameControls, wireImportGameButton } from '../components/ImportGameButton.js';
-import { requireAuth } from '../components/AuthPrompt.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from '../components/CollapsiblePanel.js';
 import { renderLibraryMobyHtml } from '../components/GameInfoPanel.js';
 import { extractCheckboxes, getProgressCheckboxes, isCheckboxComplete, buildCheckboxIndex } from '../markdown/checkboxes.js';
+import { isLocallyAuthenticated } from '../storage/auth.js';
 import { getProgress } from '../storage/progress.js';
 import { navigate } from '../router.js';
 
+function renderLibraryHeaderActions(signedIn: boolean): string {
+  if (!signedIn) return '';
+
+  return `
+    <div class="library-header-actions">
+      ${renderImportGameControls()}
+      <button type="button" id="create-game" class="btn-primary">Create Game</button>
+    </div>
+  `;
+}
+
+function renderEmptyLibrary(signedIn: boolean): string {
+  if (!signedIn) {
+    return `
+      <div class="app-shell">
+        <div class="panel">
+          <h2 class="text-xl font-semibold mb-2">No games yet</h2>
+          <p class="text-muted">Sign in from the menu to create or import game journals.</p>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="app-shell">
+      <div class="panel">
+        <h2 class="text-xl font-semibold mb-2">No games yet</h2>
+        <p class="text-muted mb-4">Create your first game journal to get started.</p>
+        <div class="library-header-actions">
+          ${renderImportGameControls()}
+          <button type="button" id="create-first" class="btn-primary">Create Game</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 export async function renderLibrary(container: HTMLElement): Promise<() => void> {
   container.innerHTML = '<div class="app-shell"><p class="text-muted">Loading games...</p></div>';
+  const signedIn = isLocallyAuthenticated();
 
   try {
     const games = await fetchGames();
 
     if (games.length === 0) {
-      container.innerHTML = `
-        <div class="app-shell">
-          <div class="panel">
-            <h2 class="text-xl font-semibold mb-2">No games yet</h2>
-            <p class="text-muted mb-4">Create your first game journal to get started.</p>
-            <div class="library-header-actions">
-              ${renderImportGameControls()}
-              <button type="button" id="create-first" class="btn-primary">Create Game</button>
-            </div>
-          </div>
-        </div>
-      `;
-      const createBtn = container.querySelector('#create-first');
-      createBtn?.addEventListener('click', async () => {
-        if (await requireAuth()) navigate('/editor');
-      });
-      const cleanupImport = wireImportGameButton(container);
-      return () => {
-        cleanupImport();
-      };
+      container.innerHTML = renderEmptyLibrary(signedIn);
+
+      if (signedIn) {
+        const onCreateFirst = () => navigate('/editor');
+        container.querySelector('#create-first')?.addEventListener('click', onCreateFirst);
+        const cleanupImport = wireImportGameButton(container);
+        return () => {
+          cleanupImport();
+          container.querySelector('#create-first')?.removeEventListener('click', onCreateFirst);
+        };
+      }
+
+      return () => {};
     }
 
     const cards = await Promise.all(
@@ -70,6 +101,10 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
           progressLabel = 'Content unavailable';
         }
 
+        const editButton = signedIn
+          ? `<button type="button" class="btn-secondary" data-edit="${game.slug}">Edit</button>`
+          : '';
+
         return renderCollapsiblePanel({
           title: game.name,
           className: 'library-game-card',
@@ -79,7 +114,7 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
               <p class="text-sm text-status">${progressLabel}</p>
               <div class="library-game-actions mt-auto">
                 <button type="button" class="btn-primary" data-view="${game.slug}">View</button>
-                <button type="button" class="btn-secondary" data-edit="${game.slug}">Edit</button>
+                ${editButton}
               </div>
             </div>
           `,
@@ -94,26 +129,21 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
             <h1 class="page-heading mb-1">Game Library</h1>
             <p class="text-muted">Pick a journal to track your completion progress.</p>
           </div>
-          <div class="library-header-actions">
-            ${renderImportGameControls()}
-            <button type="button" id="create-game" class="btn-primary">Create Game</button>
-          </div>
+          ${renderLibraryHeaderActions(signedIn)}
         </div>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${cards.join('')}</div>
       </div>
     `;
 
-    const onCreate = async () => {
-      if (await requireAuth()) navigate('/editor');
-    };
+    const onCreate = () => navigate('/editor');
     const onView = (event: Event) => {
       const slug = (event.currentTarget as HTMLElement).dataset.view;
       if (slug) navigate(`/viewer/${slug}`);
     };
 
-    const onEdit = async (event: Event) => {
+    const onEdit = (event: Event) => {
       const slug = (event.currentTarget as HTMLElement).dataset.edit;
-      if (slug && (await requireAuth())) navigate(`/editor/${slug}`);
+      if (slug) navigate(`/editor/${slug}`);
     };
 
     container.querySelector('#create-game')?.addEventListener('click', onCreate);
@@ -125,7 +155,7 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
     });
 
     const cleanupCollapsible = wireCollapsiblePanels(container);
-    const cleanupImport = wireImportGameButton(container);
+    const cleanupImport = signedIn ? wireImportGameButton(container) : () => {};
 
     return () => {
       cleanupCollapsible();

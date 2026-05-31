@@ -1,5 +1,4 @@
 import { fetchCompletionTags, fetchGame, fetchGameContent, fetchMobyGamesForGame } from '../api/client.js';
-import { requireAuth } from '../components/AuthPrompt.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from '../components/CollapsiblePanel.js';
 import { renderGameInfoHtml, wireGameInfoPanel } from '../components/GameInfoPanel.js';
 import { renderNotesPanelHtml, wireNotesPanel } from '../components/NotesPanel.js';
@@ -23,6 +22,7 @@ import { renderMarkdown } from '../markdown/render.js';
 import { buildToc, renderTocNav, wireTocNav } from '../markdown/toc.js';
 import { getImageViewportSettings } from '../storage/settings.js';
 import { getProgress, setCheckboxStates } from '../storage/progress.js';
+import { isLocallyAuthenticated } from '../storage/auth.js';
 import type { CompletionTag } from '../types/index.js';
 import { navigate } from '../router.js';
 
@@ -56,6 +56,11 @@ export async function renderViewer(
     const gameInfoHtml = mobyData.info ? renderGameInfoHtml(mobyData.info) : '';
     const summaryHtml = renderCompletionSummaryHtml(slug, tags, checkboxes, progress.checkedItems);
 
+    const signedIn = isLocallyAuthenticated();
+    const editButton = signedIn
+      ? '<button type="button" id="edit-game" class="btn-secondary">Edit</button>'
+      : '';
+
     container.innerHTML = `
       <div class="viewer-shell">
         <div id="viewer-top" class="viewer-header">
@@ -64,7 +69,7 @@ export async function renderViewer(
               <h1 class="page-heading">${escapeHtml(game.name)}</h1>
             </div>
             <div class="flex flex-wrap gap-2">
-              <button type="button" id="edit-game" class="btn-secondary">Edit</button>
+              ${editButton}
             </div>
           </div>
         </div>
@@ -115,11 +120,13 @@ export async function renderViewer(
     const cleanupToc = wireTocNav(tocContent);
     const cleanupReturnTop = wireReturnToTop(returnTopButton, viewerTop);
 
-    const onEdit = async () => {
-      if (await requireAuth()) navigate(`/editor/${slug}`);
+    const onEdit = () => {
+      navigate(`/editor/${slug}`);
     };
 
-    container.querySelector('#edit-game')?.addEventListener('click', onEdit);
+    if (signedIn) {
+      container.querySelector('#edit-game')?.addEventListener('click', onEdit);
+    }
 
     return () => {
       cleanupCollapsible();
@@ -127,7 +134,9 @@ export async function renderViewer(
       cleanupNotes();
       cleanupToc();
       cleanupReturnTop();
-      container.querySelector('#edit-game')?.removeEventListener('click', onEdit);
+      if (signedIn) {
+        container.querySelector('#edit-game')?.removeEventListener('click', onEdit);
+      }
     };
   } catch (error) {
     container.innerHTML = `
