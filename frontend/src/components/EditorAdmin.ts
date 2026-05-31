@@ -1,5 +1,13 @@
-import { deleteGame, duplicateGame } from '../api/client.js';
+import {
+  AuthRequiredError,
+  deleteGame,
+  duplicateGame,
+  fetchGameImages,
+} from '../api/client.js';
+import { requireAuth } from './AuthPrompt.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from './CollapsiblePanel.js';
+import { buildJournalExportBundle, downloadJournalBundle } from '../utils/journalBundle.js';
+import type { CompletionTagsData } from '../types/index.js';
 import { navigate } from '../router.js';
 
 export function mountEditorAdmin(
@@ -7,15 +15,16 @@ export function mountEditorAdmin(
   slug: string,
   gameName: string,
   getContent: () => string,
+  getCompletionTags: () => CompletionTagsData,
 ): () => void {
   host.innerHTML = `
     <div class="space-y-4">
       ${renderCollapsiblePanel({
-        title: 'Copy',
+        title: 'Export',
         content: `
-          <p class="text-muted text-sm">Copy the raw markdown content to your clipboard.</p>
-          <button type="button" class="btn-secondary" data-action="copy-markdown">Copy markdown</button>
-          <p id="admin-copy-status" class="text-muted text-sm"></p>
+          <p class="text-muted text-sm">Download this journal's markdown, completion tags, and uploaded images as a <code class="text-xs">.gametrackr.json</code> file.</p>
+          <button type="button" class="btn-secondary" data-action="export-journal">Export journal</button>
+          <p id="admin-export-status" class="text-muted text-sm"></p>
         `,
       })}
       ${renderCollapsiblePanel({
@@ -48,16 +57,26 @@ export function mountEditorAdmin(
     </div>
   `;
 
-  const copyStatus = host.querySelector('#admin-copy-status') as HTMLElement;
+  const exportStatus = host.querySelector('#admin-export-status') as HTMLElement;
   const duplicateStatus = host.querySelector('#admin-duplicate-status') as HTMLElement;
   const deleteStatus = host.querySelector('#admin-delete-status') as HTMLElement;
 
-  const onCopy = async () => {
+  const onExport = async () => {
+    exportStatus.textContent = 'Exporting...';
+
     try {
-      await navigator.clipboard.writeText(getContent());
-      copyStatus.textContent = 'Markdown copied to clipboard.';
-    } catch {
-      copyStatus.textContent = 'Failed to copy markdown.';
+      const images = await fetchGameImages(slug);
+      const bundle = await buildJournalExportBundle(
+        slug,
+        gameName,
+        getContent(),
+        getCompletionTags(),
+        images,
+      );
+      downloadJournalBundle(bundle);
+      exportStatus.textContent = 'Journal downloaded.';
+    } catch (error) {
+      exportStatus.textContent = error instanceof Error ? error.message : 'Export failed';
     }
   };
 
@@ -70,6 +89,10 @@ export function mountEditorAdmin(
       const game = await duplicateGame(slug, slugInput.value.trim(), nameInput.value.trim());
       navigate(`/editor/${game.slug}`);
     } catch (error) {
+      if (error instanceof AuthRequiredError && (await requireAuth())) {
+        await onDuplicate();
+        return;
+      }
       duplicateStatus.textContent = error instanceof Error ? error.message : 'Duplicate failed';
     }
   };
@@ -85,11 +108,15 @@ export function mountEditorAdmin(
       await deleteGame(slug);
       navigate('/');
     } catch (error) {
+      if (error instanceof AuthRequiredError && (await requireAuth())) {
+        await onDelete();
+        return;
+      }
       deleteStatus.textContent = error instanceof Error ? error.message : 'Delete failed';
     }
   };
 
-  host.querySelector('[data-action="copy-markdown"]')?.addEventListener('click', onCopy);
+  host.querySelector('[data-action="export-journal"]')?.addEventListener('click', onExport);
   host.querySelector('[data-action="duplicate"]')?.addEventListener('click', onDuplicate);
   host.querySelector('[data-action="delete"]')?.addEventListener('click', onDelete);
 
@@ -97,7 +124,7 @@ export function mountEditorAdmin(
 
   return () => {
     cleanupCollapsible();
-    host.querySelector('[data-action="copy-markdown"]')?.removeEventListener('click', onCopy);
+    host.querySelector('[data-action="export-journal"]')?.removeEventListener('click', onExport);
     host.querySelector('[data-action="duplicate"]')?.removeEventListener('click', onDuplicate);
     host.querySelector('[data-action="delete"]')?.removeEventListener('click', onDelete);
   };

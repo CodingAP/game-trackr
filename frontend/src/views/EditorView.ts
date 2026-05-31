@@ -16,7 +16,10 @@ import {
   saveCompletionTags,
   saveGameContent,
   uploadGameImage,
+  AuthRequiredError,
 } from '../api/client.js';
+import { requireAuth } from '../components/AuthPrompt.js';
+import { consumeImportDraft } from '../utils/journalBundle.js';
 import { navigate } from '../router.js';
 
 const DEFAULT_CONTENT = '# New Game\n\n- [ ] Add your first goal\n';
@@ -84,7 +87,7 @@ export async function renderEditor(
                   <span>Scale to fit viewport</span>
                 </label>
                 <div class="flex items-center gap-3">
-                  <input type="file" id="image-upload" accept="image/*" class="text-sm" />
+                  <input type="file" id="image-upload" accept="image/*" class="input file-input" />
                   <span id="upload-status" class="text-sm text-muted"></span>
                 </div>
               </div>
@@ -138,6 +141,17 @@ export async function renderEditor(
     onSwitchToImages: () => switchTab?.('images'),
   });
 
+  if (isNew) {
+    const draft = consumeImportDraft();
+    if (draft) {
+      const nameInput = container.querySelector('#game-name') as HTMLInputElement | null;
+      const slugInput = container.querySelector('#game-slug') as HTMLInputElement | null;
+      if (nameInput) nameInput.value = draft.name;
+      if (slugInput) slugInput.value = draft.slug;
+      markdownEditor.setValue(draft.content);
+    }
+  }
+
   if (!isNew && activeSlug) {
     try {
       const [game, content, tags] = await Promise.all([
@@ -190,6 +204,7 @@ export async function renderEditor(
         activeSlug,
         gameName,
         () => markdownEditor.getValue(),
+        () => getTagsData?.() ?? { tags: [] },
       );
     } catch (error) {
       errorEl.textContent = error instanceof Error ? error.message : 'Failed to load game';
@@ -239,6 +254,10 @@ export async function renderEditor(
       if (sourceLabelInput) sourceLabelInput.value = '';
       if (sourceUrlInput) sourceUrlInput.value = '';
     } catch (error) {
+      if (error instanceof AuthRequiredError && (await requireAuth())) {
+        await onUpload(event);
+        return;
+      }
       status.textContent = error instanceof Error ? error.message : 'Upload failed';
     }
   };
@@ -276,6 +295,10 @@ export async function renderEditor(
         navigate(`/viewer/${activeSlug}`);
       }
     } catch (error) {
+      if (error instanceof AuthRequiredError && (await requireAuth())) {
+        form.requestSubmit();
+        return;
+      }
       errorEl.textContent = error instanceof Error ? error.message : 'Save failed';
       errorEl.classList.remove('hidden');
     }

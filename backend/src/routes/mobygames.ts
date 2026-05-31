@@ -1,9 +1,10 @@
 import { Router } from 'express';
+import { requireAuth } from '../middleware/auth.js';
 import { isMobyGamesConfigured, searchMobyGames } from '../services/mobygames.js';
 
 const router = Router();
 
-router.get('/search', async (req, res) => {
+router.get('/search', requireAuth, async (req, res) => {
   if (!isMobyGamesConfigured()) {
     res.status(503).json({ error: 'MobyGames API key is not configured. Set MOBYGAMES_API_KEY.' });
     return;

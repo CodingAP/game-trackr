@@ -96,7 +96,7 @@ export function renderSettings(container: HTMLElement): () => void {
     <form id="import-data-form" class="backup-import mt-4 space-y-3">
       <label class="block">
         <span class="label">Import backup file</span>
-        <input type="file" id="import-data-file" class="input" accept="application/json,.json" />
+        <input type="file" id="import-data-file" class="input file-input" accept="application/json,.json" />
       </label>
       <div class="flex flex-wrap items-center gap-3">
         <button type="submit" class="btn-secondary">Import backup</button>

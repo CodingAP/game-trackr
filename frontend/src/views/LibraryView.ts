@@ -1,4 +1,6 @@
 import { fetchGames, fetchGameContent, fetchMobyGamesForGame } from '../api/client.js';
+import { renderImportGameControls, wireImportGameButton } from '../components/ImportGameButton.js';
+import { requireAuth } from '../components/AuthPrompt.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from '../components/CollapsiblePanel.js';
 import { renderLibraryMobyHtml } from '../components/GameInfoPanel.js';
 import { extractCheckboxes, getProgressCheckboxes, isCheckboxComplete, buildCheckboxIndex } from '../markdown/checkboxes.js';
@@ -17,13 +19,21 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
           <div class="panel">
             <h2 class="text-xl font-semibold mb-2">No games yet</h2>
             <p class="text-muted mb-4">Create your first game journal to get started.</p>
-            <button type="button" id="create-first" class="btn-primary">Create Game</button>
+            <div class="library-header-actions">
+              ${renderImportGameControls()}
+              <button type="button" id="create-first" class="btn-primary">Create Game</button>
+            </div>
           </div>
         </div>
       `;
       const createBtn = container.querySelector('#create-first');
-      createBtn?.addEventListener('click', () => navigate('/editor'));
-      return () => {};
+      createBtn?.addEventListener('click', async () => {
+        if (await requireAuth()) navigate('/editor');
+      });
+      const cleanupImport = wireImportGameButton(container);
+      return () => {
+        cleanupImport();
+      };
     }
 
     const cards = await Promise.all(
@@ -84,21 +94,26 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
             <h1 class="page-heading mb-1">Game Library</h1>
             <p class="text-muted">Pick a journal to track your completion progress.</p>
           </div>
-          <button type="button" id="create-game" class="btn-primary">Create Game</button>
+          <div class="library-header-actions">
+            ${renderImportGameControls()}
+            <button type="button" id="create-game" class="btn-primary">Create Game</button>
+          </div>
         </div>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${cards.join('')}</div>
       </div>
     `;
 
-    const onCreate = () => navigate('/editor');
+    const onCreate = async () => {
+      if (await requireAuth()) navigate('/editor');
+    };
     const onView = (event: Event) => {
       const slug = (event.currentTarget as HTMLElement).dataset.view;
       if (slug) navigate(`/viewer/${slug}`);
     };
 
-    const onEdit = (event: Event) => {
+    const onEdit = async (event: Event) => {
       const slug = (event.currentTarget as HTMLElement).dataset.edit;
-      if (slug) navigate(`/editor/${slug}`);
+      if (slug && (await requireAuth())) navigate(`/editor/${slug}`);
     };
 
     container.querySelector('#create-game')?.addEventListener('click', onCreate);
@@ -110,9 +125,11 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
     });
 
     const cleanupCollapsible = wireCollapsiblePanels(container);
+    const cleanupImport = wireImportGameButton(container);
 
     return () => {
       cleanupCollapsible();
+      cleanupImport();
       container.querySelector('#create-game')?.removeEventListener('click', onCreate);
       container.querySelectorAll('[data-view]').forEach((button) => {
         button.removeEventListener('click', onView);

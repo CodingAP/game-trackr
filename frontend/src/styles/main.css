@@ -169,8 +169,16 @@
   }
 
   .app-title {
-    @apply min-w-0 truncate text-base font-semibold tracking-tight sm:text-lg;
+    @apply flex min-w-0 items-center gap-2 truncate text-base font-semibold tracking-tight sm:text-lg;
     color: rgb(var(--text-heading));
+  }
+
+  .app-title-icon {
+    @apply h-8 w-8 shrink-0 rounded-lg object-cover;
+  }
+
+  .app-title-text {
+    @apply truncate;
   }
 
   .nav-mobile {
@@ -241,6 +249,53 @@
     border-color: rgb(var(--accent));
   }
 
+  .file-input,
+  .input[type='file'] {
+    @apply cursor-pointer py-2.5;
+    border-style: dashed;
+    border-color: rgb(var(--border));
+    background-color: rgb(var(--surface-muted) / 0.55);
+    color: rgb(var(--text-muted));
+  }
+
+  .file-input:hover,
+  .input[type='file']:hover {
+    border-color: rgb(var(--accent) / 0.55);
+    background-color: rgb(var(--hover));
+  }
+
+  .file-input:focus,
+  .input[type='file']:focus {
+    border-color: rgb(var(--accent));
+    border-style: solid;
+    background-color: rgb(var(--surface));
+    color: rgb(var(--text));
+  }
+
+  .file-input::file-selector-button,
+  .input[type='file']::file-selector-button {
+    @apply mr-3 cursor-pointer rounded-md border-0 px-3 py-1.5 text-sm font-medium transition-colors;
+    background-color: rgb(var(--accent));
+    color: #fff;
+  }
+
+  .file-input::file-selector-button:hover,
+  .input[type='file']::file-selector-button:hover {
+    background-color: rgb(var(--accent-hover));
+  }
+
+  .file-input::-webkit-file-upload-button,
+  .input[type='file']::-webkit-file-upload-button {
+    @apply mr-3 cursor-pointer rounded-md border-0 px-3 py-1.5 text-sm font-medium transition-colors;
+    background-color: rgb(var(--accent));
+    color: #fff;
+  }
+
+  .file-input::-webkit-file-upload-button:hover,
+  .input[type='file']::-webkit-file-upload-button:hover {
+    background-color: rgb(var(--accent-hover));
+  }
+
   .label {
     @apply text-sm font-medium;
     color: rgb(var(--text-muted));
@@ -289,8 +344,38 @@
     touch-action: manipulation;
   }
 
-  .nav-link:hover {
+  .nav-link-auth.is-signed-in {
+    color: rgb(var(--accent-soft));
+  }
+
+  .auth-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4;
+    background-color: rgb(var(--bg) / 0.72);
+    backdrop-filter: blur(4px);
+    padding-top: max(1rem, env(safe-area-inset-top, 0px));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .auth-dialog {
+    @apply w-full max-w-md;
+  }
+
+  .auth-dialog-title {
+    @apply mb-2 text-xl font-semibold;
     color: rgb(var(--text-heading));
+  }
+
+  .auth-form {
+    @apply mt-4 space-y-4;
+  }
+
+  .auth-actions {
+    @apply flex flex-col gap-3 sm:flex-row;
+  }
+
+  .auth-error {
+    @apply text-sm;
+    color: rgb(var(--danger-border));
   }
 
   .text-muted {
@@ -334,6 +419,15 @@
     @apply w-full sm:w-auto;
   }
 
+  .library-header-actions {
+    @apply flex flex-col gap-2 sm:flex-row sm:flex-wrap;
+  }
+
+  .library-header-actions .btn-primary,
+  .library-header-actions .btn-secondary {
+    @apply w-full sm:w-auto;
+  }
+
   .settings-section-title {
     @apply mb-1 text-lg font-semibold;
     color: rgb(var(--text-heading));
@@ -356,7 +450,20 @@
   }
 
   .image-edit-card {
-    @apply space-y-0;
+    @apply min-w-0 space-y-0;
+  }
+
+  .image-edit-card.collapsible-panel,
+  .image-edit-card.collapsible-panel .collapsible-panel-body {
+    overflow: visible;
+  }
+
+  #image-list {
+    @apply min-w-0 overflow-visible;
+  }
+
+  #tab-images {
+    @apply min-w-0 overflow-visible;
   }
 
   .editor-tabs {
@@ -524,7 +631,7 @@
   }
 
   .backup-import .input[type='file'] {
-    @apply block py-2;
+    @apply block;
   }
 
   .theme-grid {

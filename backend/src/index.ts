@@ -1,18 +1,23 @@
-import './loadEnv.js';
+import { getLoadedEnvPath, loadEnv } from './loadEnv.js';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import authRouter from './routes/auth.js';
 import gamesRouter from './routes/games.js';
 import mobyGamesRouter from './routes/mobygames.js';
+import { isAuthConfigured } from './services/auth.js';
 import { DATA_DIR } from './storage/games.js';
+
+loadEnv();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, '../../public');
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '50mb' }));
 app.use('/uploads/games', express.static(path.join(DATA_DIR)));
+app.use('/api/auth', authRouter);
 app.use('/api/mobygames', mobyGamesRouter);
 app.use('/api/games', gamesRouter);
 app.use(express.static(PUBLIC_DIR));
@@ -31,4 +36,12 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
+  if (!isAuthConfigured()) {
+    const envPath = getLoadedEnvPath();
+    console.warn(
+      envPath
+        ? `Warning: ADMIN_PASSWORD is missing or empty (checked ${envPath}). CRUD routes require auth.`
+        : 'Warning: No .env file found. Set ADMIN_PASSWORD in .env for CRUD auth.',
+    );
+  }
 });

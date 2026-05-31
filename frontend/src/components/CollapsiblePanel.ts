@@ -49,10 +49,8 @@ export function wireCollapsiblePanels(
 ): () => void {
   const onClick = (event: Event) => {
     const target = event.target as Element;
-    if (target.closest('.collapsible-panel-body')) return;
-
     const toggle = target.closest('.collapsible-panel-toggle') as HTMLButtonElement | null;
-    if (!toggle || !toggle.contains(target)) return;
+    if (!toggle) return;
 
     event.preventDefault();
     event.stopPropagation();

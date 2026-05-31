@@ -21,3 +21,9 @@ export function isImageFilename(filename: string): boolean {
 export function filterImageFilenames(filenames: string[]): string[] {
   return filenames.filter(isImageFilename);
 }
+
+export function sanitizeImportFilename(filename: string): string | null {
+  const base = path.basename(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
+  if (!base || !isImageFilename(base)) return null;
+  return base;
+}

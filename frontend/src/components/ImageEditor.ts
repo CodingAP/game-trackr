@@ -1,5 +1,5 @@
 import { fetchGameImages } from '../api/client.js';
-import { renderCollapsiblePanel } from './CollapsiblePanel.js';
+import { renderCollapsiblePanel, wireCollapsiblePanels } from './CollapsiblePanel.js';
 import {
   findDocumentImageByUrl,
   readImageFormOptions,
@@ -42,7 +42,7 @@ function mergeUploadedWithDocument(
   });
 }
 
-function renderImageCard(image: EditableImage): string {
+function renderImageCard(image: EditableImage, defaultOpen: boolean): string {
   const inDocument = Boolean(image.documentRef);
   const statusClass = inDocument ? 'image-status-in-doc' : 'image-status-stored';
   const statusLabel = inDocument ? 'In document' : 'Uploaded only';
@@ -99,6 +99,7 @@ function renderImageCard(image: EditableImage): string {
   return renderCollapsiblePanel({
     title,
     className: 'image-edit-card',
+    defaultOpen,
     attributes: { 'image-url': image.url },
     content: body,
   });
@@ -110,6 +111,7 @@ export function mountImageEditor(
   slug: string,
 ): { cleanup: () => void; refreshUploaded: () => Promise<void> } {
   let uploadedImages: UploadedImage[] = [];
+  const collapsedImages = new Set<string>();
   const handlers: Array<{ element: Element; handler: (event: Event) => void }> = [];
 
   const clearHandlers = () => {
@@ -117,6 +119,10 @@ export function mountImageEditor(
       element.removeEventListener('click', handler);
     });
     handlers.length = 0;
+  };
+
+  const scheduleRender = () => {
+    queueMicrotask(() => render());
   };
 
   const render = () => {
@@ -129,11 +135,15 @@ export function mountImageEditor(
       return;
     }
 
-    listHost.innerHTML = images.map(renderImageCard).join('');
+    listHost.innerHTML = images
+      .map((image) => renderImageCard(image, !collapsedImages.has(image.url)))
+      .join('');
 
     listHost.querySelectorAll('[data-action]').forEach((button) => {
       const handler = (event: Event) => {
         event.preventDefault();
+        event.stopPropagation();
+
         const card = (event.currentTarget as HTMLElement).closest('[data-image-url]') as HTMLElement;
         const url = card.dataset.imageUrl;
         if (!url) return;
@@ -144,17 +154,17 @@ export function mountImageEditor(
 
         if (action === 'remove-from-doc') {
           if (!documentRef) {
-            render();
+            scheduleRender();
             return;
           }
           editor.setValue(removeDocumentImage(content, documentRef));
-          render();
+          scheduleRender();
           return;
         }
 
         const options = readImageFormOptions(card, url);
         editor.setValue(upsertDocumentImage(content, options));
-        render();
+        scheduleRender();
       };
 
       button.addEventListener('click', handler);
@@ -164,16 +174,25 @@ export function mountImageEditor(
 
   const refreshUploaded = async () => {
     uploadedImages = await fetchGameImages(slug);
-    render();
+    scheduleRender();
   };
 
-  const onContentChange = () => render();
+  const onContentChange = () => scheduleRender();
   const unsubscribe = editor.onChange(onContentChange);
+  const cleanupCollapsible = wireCollapsiblePanels(listHost, {
+    onToggle: (panel, expanded) => {
+      const url = panel.dataset.imageUrl;
+      if (!url) return;
+      if (expanded) collapsedImages.delete(url);
+      else collapsedImages.add(url);
+    },
+  });
 
   void refreshUploaded();
 
   return {
     cleanup: () => {
+      cleanupCollapsible();
       unsubscribe();
       clearHandlers();
     },

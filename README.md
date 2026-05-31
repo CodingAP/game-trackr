@@ -4,6 +4,16 @@ A web-based game completion tracker. Each game is a journal — markdown files a
 
 Built with [Cursor](https://cursor.com) AI.
 
+## Authentication
+
+Create, edit, delete, and upload operations require an admin password set in `.env`:
+
+```bash
+ADMIN_PASSWORD=your_password_here
+```
+
+Sign in from the nav menu (or when you try to create/edit a journal). Sessions last **72 hours** via a browser-stored token. Viewing journals remains public.
+
 ## Stack
 
 - **Server:** Express + TypeScript — serves the API, static frontend, and uploaded images
@@ -14,6 +24,7 @@ Built with [Cursor](https://cursor.com) AI.
 
 ```bash
 npm install
+cp .env.example .env   # set ADMIN_PASSWORD and optional MOBYGAMES_API_KEY
 npm run build
 ```
 

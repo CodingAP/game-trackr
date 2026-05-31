@@ -35,3 +35,30 @@ export interface MobyGamesLink {
 export interface MobyGamesLinkBody {
   gameId: number;
 }
+
+export const JOURNAL_EXPORT_VERSION = 1;
+
+export interface JournalExportImage {
+  filename: string;
+  mimeType: string;
+  data: string;
+}
+
+export interface JournalExportBundle {
+  version: typeof JOURNAL_EXPORT_VERSION;
+  exportedAt: string;
+  name: string;
+  slug: string;
+  content: string;
+  completionTags: CompletionTagsData;
+  images: JournalExportImage[];
+}
+
+export interface ImportGameBody {
+  slug: string;
+  name: string;
+  sourceSlug?: string;
+  content: string;
+  completionTags: CompletionTagsData;
+  images: JournalExportImage[];
+}

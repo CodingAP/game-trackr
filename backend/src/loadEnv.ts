@@ -2,16 +2,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ENV_PATH = path.resolve(__dirname, '../../.env');
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
-export function loadEnv(): void {
-  let content: string;
-  try {
-    content = fs.readFileSync(ENV_PATH, 'utf-8');
-  } catch {
-    return;
-  }
+function resolveEnvPaths(): string[] {
+  return [
+    path.resolve(moduleDir, '../../.env'),
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), '../.env'),
+  ];
+}
+
+function parseEnvContent(content: string): Record<string, string> {
+  const values: Record<string, string> = {};
 
   for (const line of content.split('\n')) {
     const trimmed = line.trim();
@@ -30,10 +32,42 @@ export function loadEnv(): void {
       value = value.slice(1, -1);
     }
 
-    if (!(key in process.env)) {
-      process.env[key] = value;
-    }
+    values[key] = value;
   }
+
+  return values;
 }
 
-loadEnv();
+export function loadEnv(): string | null {
+  for (const envPath of resolveEnvPaths()) {
+    let content: string;
+    try {
+      content = fs.readFileSync(envPath, 'utf-8');
+    } catch {
+      continue;
+    }
+
+    for (const [key, value] of Object.entries(parseEnvContent(content))) {
+      const existing = process.env[key];
+      if (existing === undefined || existing === '') {
+        process.env[key] = value;
+      }
+    }
+
+    return envPath;
+  }
+
+  return null;
+}
+
+export function getLoadedEnvPath(): string | null {
+  for (const envPath of resolveEnvPaths()) {
+    try {
+      fs.accessSync(envPath, fs.constants.R_OK);
+      return envPath;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}

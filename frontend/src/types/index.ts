@@ -134,3 +134,41 @@ export interface MobyGamesGameResponse {
   link: MobyGamesLink | null;
   info: MobyGamesGameInfo | null;
 }
+
+export const JOURNAL_EXPORT_VERSION = 1;
+
+export interface JournalExportImage {
+  filename: string;
+  mimeType: string;
+  data: string;
+}
+
+export interface JournalExportBundle {
+  version: typeof JOURNAL_EXPORT_VERSION;
+  exportedAt: string;
+  name: string;
+  slug: string;
+  content: string;
+  completionTags: CompletionTagsData;
+  images: JournalExportImage[];
+}
+
+export interface ImportGameRequest {
+  slug: string;
+  name: string;
+  sourceSlug?: string;
+  content: string;
+  completionTags: CompletionTagsData;
+  images: JournalExportImage[];
+}
+
+export interface AuthSession {
+  token: string;
+  expiresAt: string;
+}
+
+export interface AuthStatus {
+  configured: boolean;
+  authenticated: boolean;
+  expiresAt?: string;
+}

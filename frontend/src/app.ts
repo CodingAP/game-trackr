@@ -1,4 +1,5 @@
 import { renderNav } from './components/Nav.js';
+import { requireAuth } from './components/AuthPrompt.js';
 import { initRouter, navigate } from './router.js';
 import type { RouteMatch } from './types/index.js';
 import { renderEditor } from './views/EditorView.js';
@@ -20,6 +21,10 @@ async function renderRoute(match: RouteMatch): Promise<void> {
       cleanup = await renderLibrary(main);
       break;
     case 'editor':
+      if (!(await requireAuth())) {
+        navigate('/');
+        return;
+      }
       cleanup = await renderEditor(main, match.params);
       break;
     case 'viewer':

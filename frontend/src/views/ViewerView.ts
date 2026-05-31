@@ -1,4 +1,5 @@
 import { fetchCompletionTags, fetchGame, fetchGameContent, fetchMobyGamesForGame } from '../api/client.js';
+import { requireAuth } from '../components/AuthPrompt.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from '../components/CollapsiblePanel.js';
 import { renderGameInfoHtml, wireGameInfoPanel } from '../components/GameInfoPanel.js';
 import { renderNotesPanelHtml, wireNotesPanel } from '../components/NotesPanel.js';
@@ -114,7 +115,9 @@ export async function renderViewer(
     const cleanupToc = wireTocNav(tocContent);
     const cleanupReturnTop = wireReturnToTop(returnTopButton, viewerTop);
 
-    const onEdit = () => navigate(`/editor/${slug}`);
+    const onEdit = async () => {
+      if (await requireAuth()) navigate(`/editor/${slug}`);
+    };
 
     container.querySelector('#edit-game')?.addEventListener('click', onEdit);
 

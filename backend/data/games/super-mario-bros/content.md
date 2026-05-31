@@ -6,13 +6,9 @@ After beating the main game, the player is given the option to pick a world (by 
 
 ## World 1
 
-World 1 is the first world in the game Super Mario Bros., located in the Mushroom Kingdom. It is set on a grassland with many bushes, hills and trees inhabited mainly by Little Goombas and Koopa Troopas.
-
 [[tag-progress:Complete World 1]]
 
 ### World 1-1
-
-World 1-1 is the first level of World 1 in Super Mario Bros. The first screen of the level is also the game's title screen when starting it up. It contains the basics of the Super Mario Bros. game, getting the player ready for the journey ahead. The level features Magic Mushrooms, standard enemies such as Little Goombas and Koopa Troopas, a lot of coins, a hidden secret bonus area that allows the player to skip most of the level, Fire Flowers, pits, and a flagpole at the end.
 
 <figure class="image-figure">
   <img src="/uploads/games/super-mario-bros/images/1780248071894-SMB_NES_World_1-1_Map.png" alt="World 1-1 Map" />
@@ -25,11 +21,21 @@ World 1-1 is the first level of World 1 in Super Mario Bros. The first screen of
 
 ### World 1-2
 
+<figure class="image-figure">
+  <img src="/uploads/games/super-mario-bros/images/1780264195746-SMB_NES_World_1-2_Map.png" alt="World 1-2 Map" />
+  <figcaption class="image-source"><a href="https://www.mariowiki.com/World_1-3_(Super_Mario_Bros.)#/">Mario Wiki</a></figcaption>
+</figure>
+
 - [ ] Complete World 1-2
   - [ ] Normal Mode
   - [ ] Hard Mode
 
 ### World 1-3
+
+<figure class="image-figure">
+  <img src="/uploads/games/super-mario-bros/images/1780264247293-SMB_NES_World_1-3_Map.png" alt="World 1-3 Map" />
+  <figcaption class="image-source"><a href="https://www.mariowiki.com/World_1-3_(Super_Mario_Bros.)#/">Mario Wiki</a></figcaption>
+</figure>
 
 - [ ] Complete World 1-3
   - [ ] Normal Mode
@@ -37,13 +43,25 @@ World 1-1 is the first level of World 1 in Super Mario Bros. The first screen of
 
 ### World 1-4
 
+<figure class="image-figure">
+  <img src="/uploads/games/super-mario-bros/images/1780264346172-SMB_NES_World_1-4_Map.png" alt="World 1-4 Map" />
+  <figcaption class="image-source"><a href="https://www.mariowiki.com/World_1-4_(Super_Mario_Bros.)#/">Mario Wiki</a></figcaption>
+</figure>
+
 - [ ] Complete World 1-4
   - [ ] Normal Mode
   - [ ] Hard Mode
 
 ## World 2
 
+[[tag-progress:Complete World 2]]
+
 ### World 2-1
+
+<figure class="image-figure">
+  <img src="/uploads/games/super-mario-bros/images/1780264456333-SMB_NES_World_2-1_Map.png" alt="World 2-1 Map" />
+  <figcaption class="image-source"><a href="https://www.mariowiki.com/World_2-1_(Super_Mario_Bros.)#/">Mario Wiki</a></figcaption>
+</figure>
 
 - [ ] Complete World 2-1
   - [ ] Normal Mode
@@ -51,11 +69,21 @@ World 1-1 is the first level of World 1 in Super Mario Bros. The first screen of
 
 ### World 2-2
 
+<figure class="image-figure">
+  <img src="/uploads/games/super-mario-bros/images/1780264586915-SMB_NES_World_2-2_Map.png" alt="World 2-2 Map" />
+  <figcaption class="image-source"><a href="https://www.mariowiki.com/World_2-2_(Super_Mario_Bros.)#/">Mario Wiki</a></figcaption>
+</figure>
+
 - [ ] Complete World 2-2
   - [ ] Normal Mode
   - [ ] Hard Mode
 
 ### World 2-3
+
+<figure class="image-figure">
+  <img src="/uploads/games/super-mario-bros/images/1780264648334-SMB_NES_World_2-3_Map.png" alt="World 2-3 Map" />
+  <figcaption class="image-source"><a href="https://www.mariowiki.com/World_2-3_(Super_Mario_Bros.)#/">Mario Wiki</a></figcaption>
+</figure>
 
 - [ ] Complete World 2-3
   - [ ] Normal Mode
@@ -63,13 +91,27 @@ World 1-1 is the first level of World 1 in Super Mario Bros. The first screen of
 
 ### World 2-4
 
+<figure class="image-figure">
+  <img src="/uploads/games/super-mario-bros/images/1780264671145-SMB_NES_World_2-4_Map.png" alt="World 2-4 Map" />
+  <figcaption class="image-source"><a href="https://www.mariowiki.com/World_2-4_(Super_Mario_Bros.)#/">Mario Wiki</a></figcaption>
+</figure>
+
 - [ ] Complete World 2-4
   - [ ] Normal Mode
   - [ ] Hard Mode
 
 ## World 3
 
+[[tag-progress:Complete World 3]]
+
 ### World 3-1
+
+
+<figure class="image-figure">
+  <img src="/uploads/games/super-mario-bros/images/1780264780400-SMB_NES_World_3-1_Map.png" alt="World 3-1 Map" />
+  <figcaption class="image-source"><a href="https://www.mariowiki.com/World_3-1_(Super_Mario_Bros.)#/">Mario Wiki</a></figcaption>
+</figure>
+
 
 - [ ] Complete World 3-1
   - [ ] Normal Mode
@@ -94,6 +136,8 @@ World 1-1 is the first level of World 1 in Super Mario Bros. The first screen of
   - [ ] Hard Mode
 
 ## World 4
+
+[[tag-progress:Complete World 4]]
 
 ### World 4-1
 
@@ -121,6 +165,8 @@ World 1-1 is the first level of World 1 in Super Mario Bros. The first screen of
 
 ## World 5
 
+[[tag-progress:Complete World 5]]
+
 ### World 5-1
 
 - [ ] Complete World 5-1
@@ -146,6 +192,8 @@ World 1-1 is the first level of World 1 in Super Mario Bros. The first screen of
   - [ ] Hard Mode
 
 ## World 6
+
+[[tag-progress:Complete World 6]]
 
 ### World 6-1
 
@@ -173,6 +221,8 @@ World 1-1 is the first level of World 1 in Super Mario Bros. The first screen of
 
 ## World 7
 
+[[tag-progress:Complete World 7]]
+
 ### World 7-1
 
 - [ ] Complete World 7-1
@@ -198,6 +248,8 @@ World 1-1 is the first level of World 1 in Super Mario Bros. The first screen of
   - [ ] Hard Mode
 
 ## World 8
+
+[[tag-progress:Complete World 8]]
 
 ### World 8-1
 

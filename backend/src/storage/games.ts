@@ -1,9 +1,16 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { CompletionTagsData, GameMeta, MobyGamesLink } from '../types.js';
+import type {
+  CompletionTagsData,
+  GameMeta,
+  JournalExportBundle,
+  JournalExportImage,
+  MobyGamesLink,
+} from '../types.js';
 import type { MobyGamesGameInfo } from '../services/mobygames.js';
 import { fetchMobyGameInfo } from '../services/mobygames.js';
+import { filterImageFilenames, sanitizeImportFilename } from './imageFiles.js';
 
 interface MobyGamesStore extends MobyGamesLink {
   cachedInfo?: MobyGamesGameInfo;
@@ -15,6 +22,20 @@ export const DATA_DIR = path.resolve(__dirname, '../../data/games');
 const INDEX_PATH = path.join(DATA_DIR, 'index.json');
 const EMPTY_TAGS: CompletionTagsData = { tags: [] };
 const DEFAULT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_IMPORT_IMAGE_BYTES = 5 * 1024 * 1024;
+
+const IMAGE_MIME_BY_EXT: Record<string, string> = {
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp',
+  '.gif': 'image/gif',
+  '.ico': 'image/x-icon',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.webm': 'video/webm',
+  '.webp': 'image/webp',
+};
 
 function getCacheTtlMs(): number {
   const hours = Number(process.env.MOBYGAMES_CACHE_TTL_HOURS);
@@ -283,6 +304,107 @@ export async function duplicateGame(
 
   const now = new Date().toISOString();
   const meta: GameMeta = { slug: newSlug, name: newName, createdAt: now, updatedAt: now };
+  games.push(meta);
+  await writeGameIndex(games);
+
+  return meta;
+}
+
+function rewriteJournalImageUrls(content: string, sourceSlug: string, targetSlug: string): string {
+  if (sourceSlug === targetSlug) return content;
+  return content.replaceAll(
+    `/uploads/games/${sourceSlug}/images/`,
+    `/uploads/games/${targetSlug}/images/`,
+  );
+}
+
+function mimeTypeForFilename(filename: string): string {
+  const ext = path.extname(filename).toLowerCase();
+  return IMAGE_MIME_BY_EXT[ext] ?? 'application/octet-stream';
+}
+
+export async function exportGameJournal(slug: string): Promise<JournalExportBundle> {
+  const game = await getGame(slug);
+  if (!game) {
+    throw new Error('Game not found');
+  }
+
+  const content = await readContent(slug);
+  const completionTags = await readCompletionTags(slug);
+  let filenames: string[] = [];
+
+  try {
+    filenames = filterImageFilenames(await fs.readdir(imagesDir(slug)));
+  } catch {
+    filenames = [];
+  }
+
+  const images: JournalExportImage[] = await Promise.all(
+    filenames.map(async (filename) => {
+      const buffer = await fs.readFile(path.join(imagesDir(slug), filename));
+      return {
+        filename,
+        mimeType: mimeTypeForFilename(filename),
+        data: buffer.toString('base64'),
+      };
+    }),
+  );
+
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    name: game.name,
+    slug: game.slug,
+    content,
+    completionTags,
+    images,
+  };
+}
+
+export async function importGameJournal(
+  slug: string,
+  name: string,
+  bundle: {
+    sourceSlug?: string;
+    content: string;
+    completionTags: CompletionTagsData;
+    images: JournalExportImage[];
+  },
+): Promise<GameMeta> {
+  const games = await readGameIndex();
+  if (games.some((game) => game.slug === slug)) {
+    throw new Error('Game already exists');
+  }
+
+  const sourceSlug = bundle.sourceSlug ?? slug;
+  const content = rewriteJournalImageUrls(bundle.content, sourceSlug, slug);
+  const completionTags = bundle.completionTags ?? EMPTY_TAGS;
+
+  await fs.mkdir(imagesDir(slug), { recursive: true });
+  await fs.writeFile(contentPath(slug), content);
+  await fs.writeFile(completionTagsPath(slug), JSON.stringify(completionTags, null, 2));
+
+  for (const image of bundle.images ?? []) {
+    const filename = sanitizeImportFilename(image.filename);
+    if (!filename) continue;
+
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(image.data, 'base64');
+    } catch {
+      throw new Error(`Invalid image data for ${image.filename}`);
+    }
+
+    if (buffer.length === 0) continue;
+    if (buffer.length > MAX_IMPORT_IMAGE_BYTES) {
+      throw new Error(`Image ${filename} exceeds the 5 MB import limit`);
+    }
+
+    await fs.writeFile(path.join(imagesDir(slug), filename), buffer);
+  }
+
+  const now = new Date().toISOString();
+  const meta: GameMeta = { slug, name, createdAt: now, updatedAt: now };
   games.push(meta);
   await writeGameIndex(games);
 

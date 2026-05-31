@@ -1,7 +1,10 @@
+import { fetchAuthStatus, logout } from '../api/client.js';
+import { requireAuth } from './AuthPrompt.js';
+import { isLocallyAuthenticated } from '../storage/auth.js';
 import { navigate } from '../router.js';
 
 export function renderNav(container: HTMLElement): void {
-  container.innerHTML = `
+  const renderMarkup = (signedIn: boolean): string => `
     <div class="nav-mobile">
       <button
         type="button"
@@ -19,9 +22,18 @@ export function renderNav(container: HTMLElement): void {
       <nav id="nav-menu" class="nav-menu" aria-label="Main">
         <button type="button" data-nav="library" class="nav-link">Library</button>
         <button type="button" data-nav="settings" class="nav-link">Settings</button>
+        <button
+          type="button"
+          data-nav="auth"
+          class="nav-link nav-link-auth ${signedIn ? 'is-signed-in' : ''}"
+        >
+          ${signedIn ? 'Sign out' : 'Sign in'}
+        </button>
       </nav>
     </div>
   `;
+
+  container.innerHTML = renderMarkup(isLocallyAuthenticated());
 
   const toggle = container.querySelector('.nav-menu-toggle') as HTMLButtonElement;
   const menu = container.querySelector('#nav-menu') as HTMLElement;
@@ -31,6 +43,25 @@ export function renderNav(container: HTMLElement): void {
     toggle.classList.toggle('is-open', open);
     toggle.setAttribute('aria-expanded', String(open));
     toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+  };
+
+  const refreshAuthState = async (): Promise<void> => {
+    try {
+      const status = await fetchAuthStatus();
+      const signedIn = status.authenticated || isLocallyAuthenticated();
+      const authButton = container.querySelector('[data-nav="auth"]') as HTMLButtonElement | null;
+      if (authButton) {
+        authButton.textContent = signedIn ? 'Sign out' : 'Sign in';
+        authButton.classList.toggle('is-signed-in', signedIn);
+      }
+    } catch {
+      const signedIn = isLocallyAuthenticated();
+      const authButton = container.querySelector('[data-nav="auth"]') as HTMLButtonElement | null;
+      if (authButton) {
+        authButton.textContent = signedIn ? 'Sign out' : 'Sign in';
+        authButton.classList.toggle('is-signed-in', signedIn);
+      }
+    }
   };
 
   const onToggle = (event: Event): void => {
@@ -50,16 +81,40 @@ export function renderNav(container: HTMLElement): void {
     }
   };
 
+  const onAuthChanged = (): void => {
+    void refreshAuthState();
+  };
+
   toggle.addEventListener('click', onToggle);
   document.addEventListener('click', onDocumentClick);
   document.addEventListener('keydown', onKeyDown);
+  window.addEventListener('game-trackr:auth-changed', onAuthChanged);
 
   container.querySelectorAll('[data-nav]').forEach((button) => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       const target = (button as HTMLElement).dataset.nav;
       setOpen(false);
-      if (target === 'library') navigate('/');
-      if (target === 'settings') navigate('/settings');
+
+      if (target === 'library') {
+        navigate('/');
+        return;
+      }
+
+      if (target === 'settings') {
+        navigate('/settings');
+        return;
+      }
+
+      if (target === 'auth') {
+        if (isLocallyAuthenticated()) {
+          logout();
+          return;
+        }
+
+        await requireAuth();
+      }
     });
   });
+
+  void refreshAuthState();
 }
