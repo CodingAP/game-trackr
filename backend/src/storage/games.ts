@@ -2,12 +2,24 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
+  CheckboxConnectionsData,
   CompletionTagsData,
+  FullJournalData,
+  GameMapsData,
   GameMeta,
+  JournalData,
   JournalExportBundle,
   JournalExportImage,
   MobyGamesLink,
 } from '../types.js';
+import {
+  checkboxesPath,
+  journalPath,
+  migrateJournalFromV1,
+  pageContentPath,
+  pagesDir,
+  readJournalFromDisk,
+} from '../migration/journal.js';
 import type { MobyGamesGameInfo } from '../services/mobygames.js';
 import { fetchMobyGameInfo } from '../services/mobygames.js';
 import { filterImageFilenames, sanitizeImportFilename } from './imageFiles.js';
@@ -21,6 +33,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = path.resolve(__dirname, '../../data/games');
 const INDEX_PATH = path.join(DATA_DIR, 'index.json');
 const EMPTY_TAGS: CompletionTagsData = { tags: [] };
+const EMPTY_CHECKBOXES: CheckboxConnectionsData = { checkboxes: [] };
+const EMPTY_MAPS: GameMapsData = { maps: [] };
+const DEFAULT_MAIN_PAGE_ID = 'main';
+const DEFAULT_CONTENT = '# New Game\n\n- [[cb:goal-1]] Add your first goal\n';
 const DEFAULT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_IMPORT_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -88,6 +104,10 @@ export function completionTagsPath(slug: string): string {
   return path.join(gameDir(slug), 'completion-tags.json');
 }
 
+export function mapsPath(slug: string): string {
+  return path.join(gameDir(slug), 'maps.json');
+}
+
 export function mobyGamesLinkPath(slug: string): string {
   return path.join(gameDir(slug), 'mobygames.json');
 }
@@ -100,7 +120,7 @@ export async function getGame(slug: string): Promise<GameMeta | undefined> {
 export async function createGame(
   slug: string,
   name: string,
-  content = '# New Game\n\n- [ ] Add your first goal\n',
+  content = DEFAULT_CONTENT,
 ): Promise<GameMeta> {
   const games = await readGameIndex();
   if (games.some((game) => game.slug === slug)) {
@@ -109,10 +129,30 @@ export async function createGame(
 
   const now = new Date().toISOString();
   const meta: GameMeta = { slug, name, createdAt: now, updatedAt: now };
+  const dir = gameDir(slug);
+  const journal: JournalData = {
+    version: 2,
+    pages: [{ id: DEFAULT_MAIN_PAGE_ID, name: 'Main', order: 0 }],
+  };
+  const checkboxes: CheckboxConnectionsData = {
+    checkboxes: [
+      {
+        id: 'goal-1',
+        label: 'Add your first goal',
+        parentId: null,
+        tagIds: [],
+      },
+    ],
+  };
 
   await fs.mkdir(imagesDir(slug), { recursive: true });
+  await fs.mkdir(pagesDir(dir), { recursive: true });
+  await fs.writeFile(journalPath(dir), JSON.stringify(journal, null, 2));
+  await fs.writeFile(pageContentPath(dir, DEFAULT_MAIN_PAGE_ID), content);
   await fs.writeFile(contentPath(slug), content);
+  await fs.writeFile(checkboxesPath(dir), JSON.stringify(checkboxes, null, 2));
   await fs.writeFile(completionTagsPath(slug), JSON.stringify(EMPTY_TAGS, null, 2));
+  await fs.writeFile(mapsPath(slug), JSON.stringify(EMPTY_MAPS, null, 2));
   games.push(meta);
   await writeGameIndex(games);
 
@@ -120,7 +160,81 @@ export async function createGame(
 }
 
 export async function readContent(slug: string): Promise<string> {
-  return fs.readFile(contentPath(slug), 'utf-8');
+  const journal = await readJournal(slug);
+  const mainPage = journal.pages.find((page) => page.id === DEFAULT_MAIN_PAGE_ID);
+  const pageId = mainPage?.id ?? journal.pages[0]?.id;
+  if (!pageId) return '';
+  return journal.contents[pageId] ?? '';
+}
+
+export async function readJournal(slug: string): Promise<FullJournalData> {
+  return readJournalFromDisk(gameDir(slug));
+}
+
+export async function writeJournal(slug: string, data: FullJournalData): Promise<GameMeta> {
+  const games = await readGameIndex();
+  const index = games.findIndex((game) => game.slug === slug);
+  if (index === -1) {
+    throw new Error('Game not found');
+  }
+
+  const dir = gameDir(slug);
+  const journal: JournalData = {
+    version: data.version,
+    pages: data.pages,
+  };
+
+  await fs.mkdir(pagesDir(dir), { recursive: true });
+  await fs.writeFile(journalPath(dir), JSON.stringify(journal, null, 2));
+
+  const pageIds = new Set(data.pages.map((page) => page.id));
+  for (const [pageId, content] of Object.entries(data.contents)) {
+    if (!pageIds.has(pageId)) continue;
+    await fs.writeFile(pageContentPath(dir, pageId), content);
+  }
+
+  const mainContent =
+    data.contents[DEFAULT_MAIN_PAGE_ID] ?? data.contents[data.pages[0]?.id ?? ''] ?? '';
+  await fs.writeFile(contentPath(slug), mainContent);
+
+  games[index] = { ...games[index], updatedAt: new Date().toISOString() };
+  await writeGameIndex(games);
+
+  return games[index];
+}
+
+export async function readCheckboxes(slug: string): Promise<CheckboxConnectionsData> {
+  try {
+    const raw = await fs.readFile(checkboxesPath(gameDir(slug)), 'utf-8');
+    return JSON.parse(raw) as CheckboxConnectionsData;
+  } catch {
+    await readJournal(slug);
+    try {
+      const raw = await fs.readFile(checkboxesPath(gameDir(slug)), 'utf-8');
+      return JSON.parse(raw) as CheckboxConnectionsData;
+    } catch {
+      return EMPTY_CHECKBOXES;
+    }
+  }
+}
+
+export async function writeCheckboxes(
+  slug: string,
+  data: CheckboxConnectionsData,
+): Promise<GameMeta> {
+  const game = await getGame(slug);
+  if (!game) {
+    throw new Error('Game not found');
+  }
+
+  await fs.writeFile(checkboxesPath(gameDir(slug)), JSON.stringify(data, null, 2));
+
+  const games = await readGameIndex();
+  const index = games.findIndex((entry) => entry.slug === slug);
+  games[index] = { ...games[index], updatedAt: new Date().toISOString() };
+  await writeGameIndex(games);
+
+  return games[index];
 }
 
 export async function writeContent(slug: string, content: string): Promise<GameMeta> {
@@ -153,6 +267,33 @@ export async function writeCompletionTags(slug: string, data: CompletionTagsData
   }
 
   await fs.writeFile(completionTagsPath(slug), JSON.stringify(data, null, 2));
+
+  const games = await readGameIndex();
+  const index = games.findIndex((entry) => entry.slug === slug);
+  games[index] = { ...games[index], updatedAt: new Date().toISOString() };
+  await writeGameIndex(games);
+
+  return games[index];
+}
+
+export async function readMaps(slug: string): Promise<GameMapsData> {
+  try {
+    const raw = await fs.readFile(mapsPath(slug), 'utf-8');
+    const parsed = JSON.parse(raw) as GameMapsData;
+    if (!Array.isArray(parsed.maps)) return EMPTY_MAPS;
+    return parsed;
+  } catch {
+    return EMPTY_MAPS;
+  }
+}
+
+export async function writeMaps(slug: string, data: GameMapsData): Promise<GameMeta> {
+  const game = await getGame(slug);
+  if (!game) {
+    throw new Error('Game not found');
+  }
+
+  await fs.writeFile(mapsPath(slug), JSON.stringify(data, null, 2));
 
   const games = await readGameIndex();
   const index = games.findIndex((entry) => entry.slug === slug);
@@ -318,6 +459,19 @@ function rewriteJournalImageUrls(content: string, sourceSlug: string, targetSlug
   );
 }
 
+function rewriteMapsImageUrls(maps: GameMapsData, sourceSlug: string, targetSlug: string): GameMapsData {
+  if (sourceSlug === targetSlug) return maps;
+  return {
+    maps: maps.maps.map((map) => ({
+      ...map,
+      imageUrl: map.imageUrl.replaceAll(
+        `/uploads/games/${sourceSlug}/images/`,
+        `/uploads/games/${targetSlug}/images/`,
+      ),
+    })),
+  };
+}
+
 function mimeTypeForFilename(filename: string): string {
   const ext = path.extname(filename).toLowerCase();
   return IMAGE_MIME_BY_EXT[ext] ?? 'application/octet-stream';
@@ -329,8 +483,12 @@ export async function exportGameJournal(slug: string): Promise<JournalExportBund
     throw new Error('Game not found');
   }
 
-  const content = await readContent(slug);
-  const completionTags = await readCompletionTags(slug);
+  const [journal, checkboxes, completionTags, maps] = await Promise.all([
+    readJournal(slug),
+    readCheckboxes(slug),
+    readCompletionTags(slug),
+    readMaps(slug),
+  ]);
   let filenames: string[] = [];
 
   try {
@@ -351,12 +509,14 @@ export async function exportGameJournal(slug: string): Promise<JournalExportBund
   );
 
   return {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     name: game.name,
     slug: game.slug,
-    content,
+    journal,
+    checkboxes,
     completionTags,
+    maps,
     images,
   };
 }
@@ -366,8 +526,10 @@ export async function importGameJournal(
   name: string,
   bundle: {
     sourceSlug?: string;
-    content: string;
+    journal: FullJournalData;
+    checkboxes: CheckboxConnectionsData;
     completionTags: CompletionTagsData;
+    maps?: GameMapsData;
     images: JournalExportImage[];
   },
 ): Promise<GameMeta> {
@@ -377,12 +539,35 @@ export async function importGameJournal(
   }
 
   const sourceSlug = bundle.sourceSlug ?? slug;
-  const content = rewriteJournalImageUrls(bundle.content, sourceSlug, slug);
-  const completionTags = bundle.completionTags ?? EMPTY_TAGS;
+  const rewrittenContents: Record<string, string> = {};
+  for (const [pageId, content] of Object.entries(bundle.journal.contents)) {
+    rewrittenContents[pageId] = rewriteJournalImageUrls(content, sourceSlug, slug);
+  }
 
+  const journal: FullJournalData = {
+    version: bundle.journal.version,
+    pages: bundle.journal.pages,
+    contents: rewrittenContents,
+  };
+  const checkboxes = bundle.checkboxes ?? EMPTY_CHECKBOXES;
+  const completionTags = bundle.completionTags ?? EMPTY_TAGS;
+  const maps = rewriteMapsImageUrls(bundle.maps ?? EMPTY_MAPS, sourceSlug, slug);
+
+  const dir = gameDir(slug);
   await fs.mkdir(imagesDir(slug), { recursive: true });
-  await fs.writeFile(contentPath(slug), content);
+  await fs.mkdir(pagesDir(dir), { recursive: true });
+  await fs.writeFile(journalPath(dir), JSON.stringify({ version: journal.version, pages: journal.pages }, null, 2));
+
+  for (const [pageId, content] of Object.entries(rewrittenContents)) {
+    await fs.writeFile(pageContentPath(dir, pageId), content);
+  }
+
+  const mainContent =
+    rewrittenContents[DEFAULT_MAIN_PAGE_ID] ?? rewrittenContents[journal.pages[0]?.id ?? ''] ?? '';
+  await fs.writeFile(contentPath(slug), mainContent);
+  await fs.writeFile(checkboxesPath(dir), JSON.stringify(checkboxes, null, 2));
   await fs.writeFile(completionTagsPath(slug), JSON.stringify(completionTags, null, 2));
+  await fs.writeFile(mapsPath(slug), JSON.stringify(maps, null, 2));
 
   for (const image of bundle.images ?? []) {
     const filename = sanitizeImportFilename(image.filename);

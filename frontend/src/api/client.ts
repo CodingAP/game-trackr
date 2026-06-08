@@ -7,7 +7,10 @@ import {
 import type {
   AuthSession,
   AuthStatus,
+  CheckboxConnectionsData,
   CompletionTagsData,
+  FullJournalData,
+  GameMapsData,
   GameMeta,
   ImportGameRequest,
   JournalExportBundle,
@@ -106,6 +109,57 @@ export async function fetchGameContent(slug: string): Promise<string> {
   return response.text();
 }
 
+export async function fetchGameJournal(slug: string): Promise<FullJournalData> {
+  return request<FullJournalData>(`/api/games/${slug}/journal`);
+}
+
+export async function saveGameJournal(slug: string, data: FullJournalData): Promise<GameMeta> {
+  return request<GameMeta>(
+    `/api/games/${slug}/journal`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+    true,
+  );
+}
+
+export async function fetchCheckboxConnections(slug: string): Promise<CheckboxConnectionsData> {
+  return request<CheckboxConnectionsData>(`/api/games/${slug}/checkboxes`);
+}
+
+export async function saveCheckboxConnections(
+  slug: string,
+  data: CheckboxConnectionsData,
+): Promise<GameMeta> {
+  return request<GameMeta>(
+    `/api/games/${slug}/checkboxes`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+    true,
+  );
+}
+
+export async function fetchMaps(slug: string): Promise<GameMapsData> {
+  return request<GameMapsData>(`/api/games/${slug}/maps`);
+}
+
+export async function saveMaps(slug: string, data: GameMapsData): Promise<GameMeta> {
+  return request<GameMeta>(
+    `/api/games/${slug}/maps`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+    true,
+  );
+}
+
 export async function createGame(slug: string, name: string, content?: string): Promise<GameMeta> {
   return request<GameMeta>(
     '/api/games',
@@ -152,6 +206,21 @@ export async function uploadGameImage(slug: string, file: File): Promise<Uploade
   }
 
   return response.json() as Promise<UploadedImage>;
+}
+
+export async function uploadGameImageFromUrl(
+  slug: string,
+  url: string,
+): Promise<UploadedImage> {
+  return request<UploadedImage>(
+    `/api/games/${slug}/images/from-url`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    },
+    true,
+  );
 }
 
 export async function fetchGameImages(slug: string): Promise<UploadedImage[]> {

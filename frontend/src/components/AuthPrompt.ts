@@ -1,5 +1,6 @@
 import { loginWithPassword } from '../api/client.js';
 import { isLocallyAuthenticated } from '../storage/auth.js';
+import { iconLabel } from './icons.js';
 
 let activePrompt: Promise<boolean> | null = null;
 
@@ -32,8 +33,8 @@ function showAuthPrompt(): Promise<boolean> {
           </label>
           <p id="auth-error" class="auth-error hidden"></p>
           <div class="auth-actions">
-            <button type="submit" class="btn-primary">Sign in</button>
-            <button type="button" class="btn-secondary" data-action="cancel">Cancel</button>
+            <button type="submit" class="btn-primary">${iconLabel('log-in', 'Sign in')}</button>
+            <button type="button" class="btn-secondary" data-action="cancel">${iconLabel('close', 'Cancel')}</button>
           </div>
         </form>
       </div>

@@ -2,6 +2,7 @@ import { fetchAuthStatus, logout } from '../api/client.js';
 import { requireAuth } from './AuthPrompt.js';
 import { isLocallyAuthenticated } from '../storage/auth.js';
 import { navigate } from '../router.js';
+import { iconLabel } from './icons.js';
 
 export function renderNav(container: HTMLElement): void {
   const renderMarkup = (signedIn: boolean): string => `
@@ -20,14 +21,14 @@ export function renderNav(container: HTMLElement): void {
         </span>
       </button>
       <nav id="nav-menu" class="nav-menu" aria-label="Main">
-        <button type="button" data-nav="library" class="nav-link">Library</button>
-        <button type="button" data-nav="settings" class="nav-link">Settings</button>
+        <button type="button" data-nav="library" class="nav-link">${iconLabel('library', 'Library')}</button>
+        <button type="button" data-nav="settings" class="nav-link">${iconLabel('settings', 'Settings')}</button>
         <button
           type="button"
           data-nav="auth"
           class="nav-link nav-link-auth ${signedIn ? 'is-signed-in' : ''}"
         >
-          ${signedIn ? 'Sign out' : 'Sign in'}
+          ${iconLabel(signedIn ? 'log-out' : 'log-in', signedIn ? 'Sign out' : 'Sign in')}
         </button>
       </nav>
     </div>
@@ -45,22 +46,23 @@ export function renderNav(container: HTMLElement): void {
     toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
   };
 
+  const setAuthButton = (signedIn: boolean): void => {
+    const authButton = container.querySelector('[data-nav="auth"]') as HTMLButtonElement | null;
+    if (authButton) {
+      authButton.innerHTML = iconLabel(
+        signedIn ? 'log-out' : 'log-in',
+        signedIn ? 'Sign out' : 'Sign in',
+      );
+      authButton.classList.toggle('is-signed-in', signedIn);
+    }
+  };
+
   const refreshAuthState = async (): Promise<void> => {
     try {
       const status = await fetchAuthStatus();
-      const signedIn = status.authenticated || isLocallyAuthenticated();
-      const authButton = container.querySelector('[data-nav="auth"]') as HTMLButtonElement | null;
-      if (authButton) {
-        authButton.textContent = signedIn ? 'Sign out' : 'Sign in';
-        authButton.classList.toggle('is-signed-in', signedIn);
-      }
+      setAuthButton(status.authenticated || isLocallyAuthenticated());
     } catch {
-      const signedIn = isLocallyAuthenticated();
-      const authButton = container.querySelector('[data-nav="auth"]') as HTMLButtonElement | null;
-      if (authButton) {
-        authButton.textContent = signedIn ? 'Sign out' : 'Sign in';
-        authButton.classList.toggle('is-signed-in', signedIn);
-      }
+      setAuthButton(isLocallyAuthenticated());
     }
   };
 

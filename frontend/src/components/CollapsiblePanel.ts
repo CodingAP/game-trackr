@@ -8,6 +8,8 @@ function escapeHtml(value: string): string {
 
 export interface CollapsiblePanelOptions {
   title: string;
+  /** Pre-escaped HTML for the title area. Falls back to plain `title` when omitted. */
+  titleHtml?: string;
   content: string;
   className?: string;
   id?: string;
@@ -29,11 +31,12 @@ export function renderCollapsiblePanel(options: CollapsiblePanelOptions): string
         .join('')
     : '';
   const hiddenAttr = open ? '' : ' hidden';
+  const titleContent = options.titleHtml ?? escapeHtml(options.title);
 
   return `
     <section class="panel collapsible-panel${extraClass}" data-collapsible${idAttr}${dataAttrs}>
       <button type="button" class="collapsible-panel-toggle" aria-expanded="${open ? 'true' : 'false'}">
-        <span class="collapsible-panel-title">${escapeHtml(options.title)}</span>
+        <span class="collapsible-panel-title">${titleContent}</span>
         <span class="collapsible-panel-icon" aria-hidden="true"></span>
       </button>
       <div class="collapsible-panel-body"${hiddenAttr}>

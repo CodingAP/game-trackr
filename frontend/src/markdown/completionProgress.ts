@@ -1,10 +1,11 @@
-import type { CompletionTag } from '../types/index.js';
+import type { CompletionTag, ManagedCheckbox } from '../types/index.js';
 import type { CheckboxItem } from './checkboxes.js';
 import {
   buildCheckboxIndex,
   getProgressCheckboxes,
   isCheckboxComplete,
 } from './checkboxes.js';
+import { getTagCheckboxIds, managedToCheckboxItems } from './managedCheckboxes.js';
 import { renderCollapsiblePanel } from '../components/CollapsiblePanel.js';
 import { renderPlaytimeSectionHtml } from '../components/PlaytimePanel.js';
 import { getPlaytime } from '../storage/playtime.js';
@@ -15,7 +16,7 @@ export interface ProgressStats {
   percent: number;
 }
 
-export const TAG_PROGRESS_MARKER = /\[\[tag-progress:([^\]]+)\]\]/g;
+export const TAG_PROGRESS_MARKER = /\[\[(?:pb|tag-progress):([^\]]+)\]\]/g;
 
 export function resolveTag(tags: CompletionTag[], reference: string): CompletionTag | undefined {
   const trimmed = reference.trim();
@@ -29,10 +30,14 @@ export function computeTagProgress(
   tag: CompletionTag,
   checkedItems: Record<string, boolean>,
   checkboxes: CheckboxItem[],
+  managed?: ManagedCheckbox[],
 ): ProgressStats {
   const index = buildCheckboxIndex(checkboxes);
-  const total = tag.checkboxIds.length;
-  const completed = tag.checkboxIds.filter((id) =>
+  const checkboxIds = managed
+    ? getTagCheckboxIds(tag.id, managed)
+    : (tag.checkboxIds ?? []);
+  const total = checkboxIds.length;
+  const completed = checkboxIds.filter((id) =>
     isCheckboxComplete(id, index, checkedItems),
   ).length;
   const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
@@ -94,6 +99,7 @@ export function renderCompletionSummaryHtml(
   tags: CompletionTag[],
   checkboxes: CheckboxItem[],
   checkedItems: Record<string, boolean>,
+  managed?: ManagedCheckbox[],
 ): string {
   const overall = computeOverallProgress(checkboxes, checkedItems);
   const summaryTags = tags.filter((tag) => tag.showInSummary && tag.name.trim());
@@ -101,7 +107,7 @@ export function renderCompletionSummaryHtml(
 
   const tagBars = summaryTags
     .map((tag) => {
-      const stats = computeTagProgress(tag, checkedItems, checkboxes);
+      const stats = computeTagProgress(tag, checkedItems, checkboxes, managed);
       return renderProgressBarHtml(tag.name, stats, { tagId: tag.id, compact: true });
     })
     .join('');
@@ -144,6 +150,7 @@ export function mountTagProgressBlocks(
   tags: CompletionTag[],
   checkboxes: CheckboxItem[],
   checkedItems: Record<string, boolean>,
+  managed?: ManagedCheckbox[],
 ): void {
   container.querySelectorAll('.tag-progress[data-tag-ref]').forEach((element) => {
     const ref = decodeURIComponent(element.getAttribute('data-tag-ref') ?? '');
@@ -153,7 +160,7 @@ export function mountTagProgressBlocks(
       return;
     }
 
-    const stats = computeTagProgress(tag, checkedItems, checkboxes);
+    const stats = computeTagProgress(tag, checkedItems, checkboxes, managed);
     element.outerHTML = renderProgressBarHtml(tag.name, stats, { tagId: tag.id });
   });
 }
@@ -179,6 +186,7 @@ export function refreshProgressUi(
   tags: CompletionTag[],
   checkboxes: CheckboxItem[],
   checkedItems: Record<string, boolean>,
+  managed?: ManagedCheckbox[],
 ): void {
   const overall = computeOverallProgress(checkboxes, checkedItems);
   const overallBlock = root.querySelector('[data-progress-scope="overall"] .progress-bar-block');
@@ -187,14 +195,18 @@ export function refreshProgressUi(
   }
 
   tags.forEach((tag) => {
-    const stats = computeTagProgress(tag, checkedItems, checkboxes);
+    const stats = computeTagProgress(tag, checkedItems, checkboxes, managed);
     root.querySelectorAll(`[data-tag-id="${tag.id}"]`).forEach((element) => {
       updateProgressBarElement(element as HTMLElement, tag.name, stats);
     });
   });
 }
 
+export function buildCheckboxItemsFromManaged(managed: ManagedCheckbox[]): CheckboxItem[] {
+  return managedToCheckboxItems(managed);
+}
+
 export function buildTagProgressMarker(tag: CompletionTag): string {
   const name = tag.name.trim() || 'Tag name';
-  return `[[tag-progress:${name}]]`;
+  return `[[pb:${name}]]`;
 }

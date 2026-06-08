@@ -444,8 +444,14 @@
   }
 
   .image-edit-preview {
-    @apply h-24 w-24 shrink-0 rounded-lg border object-cover;
+    @apply h-16 w-16 shrink-0 rounded-lg border object-cover;
     border-color: rgb(var(--border));
+    background-color: rgb(var(--surface-muted));
+  }
+
+  .image-edit-thumb {
+    @apply h-9 w-9 shrink-0 rounded border object-cover;
+    border-color: rgb(var(--border-subtle));
     background-color: rgb(var(--surface-muted));
   }
 
@@ -458,7 +464,24 @@
     overflow: visible;
   }
 
-  #image-list {
+  .image-edit-card.collapsible-panel .collapsible-panel-toggle {
+    @apply items-center;
+  }
+
+  .image-edit-card-title-wrap {
+    @apply flex min-w-0 items-center gap-2;
+  }
+
+  .image-edit-card-title-text {
+    @apply min-w-0 truncate font-medium;
+    color: rgb(var(--text-heading));
+  }
+
+  .image-upload-section {
+    @apply overflow-visible;
+  }
+
+  #image-editor {
     @apply min-w-0 overflow-visible;
   }
 
@@ -466,8 +489,21 @@
     @apply min-w-0 overflow-visible;
   }
 
+  .editor-header-bar {
+    @apply flex flex-col gap-3 border-b pb-2 sm:flex-row sm:items-center sm:justify-between;
+    border-color: rgb(var(--border));
+  }
+
+  .editor-header-tabs {
+    @apply min-w-0 flex-1;
+  }
+
+  .editor-header-actions {
+    @apply shrink-0 flex-row gap-2 pt-0;
+  }
+
   .editor-tabs {
-    @apply flex flex-wrap gap-2 border-b pb-2;
+    @apply flex flex-wrap gap-2;
     border-color: rgb(var(--border));
   }
 
@@ -492,6 +528,56 @@
     @apply block min-w-0 overflow-visible;
   }
 
+  .editor-tab-panel {
+    @apply relative;
+  }
+
+  .editor-tab-panel-body {
+    @apply pr-10;
+  }
+
+  .editor-tab-help {
+    @apply absolute right-0 top-0 z-20;
+  }
+
+  .editor-tab-help-trigger {
+    @apply flex h-9 w-9 items-center justify-center rounded-full transition-colors;
+    color: rgb(var(--text-faint));
+    touch-action: manipulation;
+  }
+
+  .editor-tab-help-trigger:hover,
+  .editor-tab-help-trigger[aria-expanded='true'] {
+    background-color: rgb(var(--hover));
+    color: rgb(var(--text-heading));
+  }
+
+  .editor-tab-help-popover {
+    @apply absolute right-0 top-full z-30 mt-2 rounded-xl border p-4 pt-8 shadow-lg;
+    width: min(20rem, calc(100vw - 2rem));
+    border-color: rgb(var(--border-subtle));
+    background-color: rgb(var(--surface));
+  }
+
+  .editor-tab-help-content {
+    @apply space-y-2 text-sm leading-relaxed;
+    color: rgb(var(--text-muted));
+  }
+
+  .editor-tab-help-content code {
+    @apply text-xs;
+  }
+
+  .editor-tab-help-close {
+    @apply absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full transition-colors;
+    color: rgb(var(--text-faint));
+  }
+
+  .editor-tab-help-close:hover {
+    background-color: rgb(var(--hover));
+    color: rgb(var(--text-heading));
+  }
+
   #completion-tags-editor {
     @apply min-w-0 overflow-visible;
   }
@@ -509,9 +595,57 @@
   }
 
   .markdown-toolbar-btn {
-    @apply min-h-9 min-w-9 rounded-md px-3 py-2 text-xs font-medium transition-colors;
+    @apply inline-flex min-h-9 min-w-9 items-center justify-center rounded-md px-3 py-2 text-xs font-medium transition-colors;
     color: rgb(var(--text-muted));
     touch-action: manipulation;
+  }
+
+  .markdown-toolbar-text {
+    @apply text-[11px] font-semibold uppercase tracking-wide;
+  }
+
+  .ui-icon {
+    @apply shrink-0;
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+
+  .ui-icon-sm {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  .ui-icon-md {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+
+  .ui-icon-lg {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .icon-label {
+    @apply inline-flex items-center gap-2;
+  }
+
+  .btn-primary .icon-label,
+  .btn-secondary .icon-label,
+  .btn-danger .icon-label,
+  .nav-link .icon-label,
+  .editor-tab .icon-label {
+    @apply inline-flex items-center gap-2;
+  }
+
+  .icon-btn {
+    @apply inline-flex items-center justify-center;
+  }
+
+  .completion-chip-remove,
+  .pages-sidebar-remove,
+  .image-insert-close,
+  .playtime-entry-remove {
+    @apply inline-flex items-center justify-center;
   }
 
   .markdown-toolbar-btn:hover {
@@ -557,6 +691,29 @@
   .completion-tag-card.collapsible-panel,
   .completion-tag-card.collapsible-panel .collapsible-panel-body {
     overflow: visible;
+  }
+
+  .checkbox-connection-card {
+    @apply min-w-0 space-y-0;
+  }
+
+  .checkbox-connection-card.collapsible-panel,
+  .checkbox-connection-card.collapsible-panel .collapsible-panel-body {
+    overflow: visible;
+  }
+
+  .checkbox-panel-title {
+    @apply flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm font-normal normal-case tracking-normal;
+  }
+
+  .checkbox-panel-title-main {
+    @apply min-w-0 font-medium;
+    color: rgb(var(--text-heading));
+  }
+
+  .checkbox-panel-title-tags {
+    @apply shrink-0;
+    color: rgb(var(--text-muted));
   }
 
   .completion-tag-header {
@@ -972,6 +1129,56 @@
     @apply mt-2 min-h-[1rem];
   }
 
+  .list-search {
+    @apply block;
+  }
+
+  .list-search-field {
+    @apply relative flex min-h-10 items-center rounded-full border px-1 transition-colors;
+    border-color: rgb(var(--border-subtle));
+    background-color: rgb(var(--surface-muted) / 0.55);
+  }
+
+  .list-search-field:focus-within {
+    border-color: rgb(var(--accent));
+    background-color: rgb(var(--surface));
+    box-shadow: 0 0 0 1px rgb(var(--accent) / 0.15);
+  }
+
+  .list-search-icon {
+    @apply pointer-events-none absolute left-3 flex items-center;
+    color: rgb(var(--text-faint));
+  }
+
+  .list-search-input {
+    @apply w-full border-0 bg-transparent py-2 pl-10 pr-10 text-sm outline-none;
+    color: rgb(var(--text));
+  }
+
+  .list-search-input::placeholder {
+    color: rgb(var(--text-faint));
+  }
+
+  .list-search-input::-webkit-search-cancel-button,
+  .list-search-input::-webkit-search-decoration {
+    display: none;
+  }
+
+  .list-search-clear {
+    @apply absolute right-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors;
+    color: rgb(var(--text-faint));
+  }
+
+  .list-search-clear:hover {
+    background-color: rgb(var(--hover));
+    color: rgb(var(--text-heading));
+  }
+
+  .list-search-empty {
+    @apply mt-2 text-xs;
+    color: rgb(var(--text-muted));
+  }
+
   .collapsible-panel {
     @apply overflow-hidden;
   }
@@ -1013,7 +1220,8 @@
   }
 
   .completion-tag-card.collapsible-panel .collapsible-panel-title,
-  .image-edit-card.collapsible-panel .collapsible-panel-title {
+  .image-edit-card.collapsible-panel .collapsible-panel-title,
+  .checkbox-connection-card.collapsible-panel .collapsible-panel-title {
     @apply text-base font-medium normal-case tracking-normal;
     color: rgb(var(--text-heading));
   }
@@ -1312,5 +1520,429 @@
 
   .border-red-500\/40 {
     border-color: rgb(var(--danger-border) / 0.4);
+  }
+
+  .pages-editor-layout {
+    @apply flex flex-col gap-4 lg:flex-row lg:items-start;
+  }
+
+  .pages-sidebar {
+    @apply w-full shrink-0 rounded-lg border lg:sticky lg:top-20 lg:w-56;
+    border-color: rgb(var(--border));
+    background-color: rgb(var(--surface-muted));
+  }
+
+  .pages-sidebar-inner {
+    @apply flex flex-col gap-3 p-3;
+  }
+
+  .pages-sidebar-header {
+    @apply flex items-center justify-between gap-2;
+  }
+
+  .pages-sidebar-list {
+    @apply m-0 max-h-[40vh] list-none space-y-1 overflow-y-auto p-0 lg:max-h-[calc(100vh-12rem)];
+  }
+
+  .pages-sidebar-item {
+    @apply flex items-center gap-0.5 rounded-md;
+  }
+
+  .pages-sidebar-item.is-active {
+    background-color: rgb(var(--hover));
+    box-shadow: inset 3px 0 0 rgb(var(--accent));
+  }
+
+  .pages-sidebar-select {
+    @apply min-h-10 min-w-0 flex-1 rounded-md px-2 py-2 text-left text-sm transition-colors;
+    color: rgb(var(--text-muted));
+  }
+
+  .pages-sidebar-select:hover {
+    color: rgb(var(--text-heading));
+  }
+
+  .pages-sidebar-name {
+    @apply block w-full truncate px-1 py-0.5 text-left text-sm;
+    color: rgb(var(--text-heading));
+  }
+
+  .pages-sidebar-name-input {
+    @apply w-full rounded-md border px-1 py-0.5 text-sm outline-none;
+    border-color: rgb(var(--border-subtle));
+    background-color: rgb(var(--surface));
+    color: rgb(var(--text-heading));
+  }
+
+  .pages-sidebar-name-input:focus {
+    border-color: rgb(var(--accent));
+    outline: 2px solid rgb(var(--accent));
+    outline-offset: 1px;
+  }
+
+  .pages-sidebar-remove {
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-lg leading-none transition-colors;
+    color: rgb(var(--text-faint));
+  }
+
+  .pages-sidebar-remove:hover {
+    background-color: rgb(var(--surface));
+    color: rgb(var(--text-heading));
+  }
+
+  .pages-sidebar-hint {
+    @apply text-xs leading-relaxed;
+  }
+
+  .pages-editor-main {
+    @apply min-w-0 flex-1;
+  }
+
+  .journal-toc {
+    @apply space-y-4;
+  }
+
+  .toc-pages-label,
+  .toc-sections-label {
+    @apply mb-2 text-xs font-semibold uppercase tracking-wide;
+    color: rgb(var(--text-faint));
+  }
+
+  .toc-page-list {
+    @apply m-0 list-none space-y-1 p-0;
+  }
+
+  .toc-page-link {
+    @apply w-full rounded-md px-2 py-2 text-left text-sm transition-colors;
+    color: rgb(var(--text-muted));
+  }
+
+  .toc-page-link:hover {
+    background-color: rgb(var(--hover));
+    color: rgb(var(--text-heading));
+  }
+
+  .toc-page-item.is-active .toc-page-link {
+    background-color: rgb(var(--hover));
+    color: rgb(var(--text-heading));
+    font-weight: 600;
+  }
+
+  .managed-checkbox-list {
+    @apply my-2 list-none space-y-1 p-0;
+  }
+
+  .managed-checkbox {
+    @apply list-none;
+  }
+
+  .managed-checkbox[data-cb-depth='1'] {
+    margin-left: 1.5rem;
+  }
+
+  .managed-checkbox[data-cb-depth='2'] {
+    margin-left: 3rem;
+  }
+
+  .managed-checkbox[data-cb-depth='3'] {
+    margin-left: 4.5rem;
+  }
+
+  .managed-checkbox label {
+    @apply inline-flex items-start gap-2 text-sm;
+    color: rgb(var(--text));
+  }
+
+  .managed-checkbox input[type='checkbox'] {
+    @apply mt-0.5;
+  }
+
+  .checkbox-tags-empty {
+    @apply py-1 text-sm;
+    color: rgb(var(--text-faint));
+  }
+
+  .checkbox-tags-chips {
+    @apply mb-2 flex flex-wrap gap-2;
+  }
+
+  .completion-chip-compact {
+    @apply py-1 text-xs;
+  }
+
+  .checkbox-editor-table-wrap {
+    @apply overflow-x-auto;
+  }
+
+  .checkbox-editor-table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  .checkbox-editor-table th {
+    @apply border-b px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide;
+    border-color: rgb(var(--border));
+    color: rgb(var(--text-faint));
+  }
+
+  .checkbox-editor-table td {
+    @apply border-b px-3 py-2.5 align-top;
+    border-color: rgb(var(--border));
+  }
+
+  .checkbox-editor-input {
+    @apply min-w-0 px-2.5 py-2 text-sm;
+  }
+
+  .checkbox-editor-table td:first-child .checkbox-editor-input {
+    min-width: 11rem;
+  }
+
+  .checkbox-editor-table td:nth-child(2) .checkbox-editor-input {
+    min-width: 9rem;
+  }
+
+  .checkbox-editor-table td:nth-child(3) .checkbox-editor-input {
+    min-width: 8rem;
+  }
+
+  .checkbox-editor-id {
+    @apply font-mono text-xs;
+  }
+
+  .checkbox-editor-tags {
+    @apply min-w-[12rem] space-y-1.5;
+  }
+
+  .checkbox-editor-tags .checkbox-tags-chips {
+    @apply mb-1.5 gap-1.5;
+  }
+
+  .checkbox-editor-tags .checkbox-tag-select {
+    @apply px-2.5 py-1.5 text-xs;
+  }
+
+  .checkbox-editor-actions-col {
+    @apply w-24;
+  }
+
+  .checkbox-editor-actions {
+    @apply flex gap-1.5;
+  }
+
+  .checkbox-editor-action {
+    @apply px-2.5 py-1.5;
+  }
+
+  .image-insert-dialog {
+    @apply max-h-[90vh] max-w-4xl overflow-y-auto;
+  }
+
+  .image-insert-header {
+    @apply mb-4 flex items-start justify-between gap-3;
+  }
+
+  .image-insert-body {
+    @apply grid min-w-0 gap-6 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)];
+  }
+
+  .image-insert-picker {
+    @apply min-w-0;
+  }
+
+  .image-insert-close {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-2xl leading-none transition-colors;
+    color: rgb(var(--text-faint));
+  }
+
+  .image-insert-close:hover {
+    background-color: rgb(var(--hover));
+    color: rgb(var(--text-heading));
+  }
+
+  .image-picker-list {
+    @apply min-w-0;
+  }
+
+  .image-picker-grid {
+    @apply flex gap-3 overflow-x-auto pb-2;
+    scroll-snap-type: x proximity;
+  }
+
+  .image-picker-item {
+    @apply flex w-36 shrink-0 snap-start flex-col overflow-hidden rounded-lg border text-left transition-colors;
+    border-color: rgb(var(--border));
+    background-color: rgb(var(--surface-muted));
+  }
+
+  .image-picker-item:hover {
+    border-color: rgb(var(--accent));
+    background-color: rgb(var(--hover));
+  }
+
+  .image-picker-thumb {
+    @apply aspect-video w-full object-cover;
+    background-color: rgb(var(--surface));
+  }
+
+  .image-picker-label {
+    @apply truncate px-2 py-2 text-xs;
+    color: rgb(var(--text-muted));
+  }
+
+  .image-insert-upload {
+    @apply min-w-0 border-t pt-4 md:border-t-0 md:border-l md:pl-6 md:pt-0;
+    border-color: rgb(var(--border));
+  }
+
+  .progress-tag-options {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .markdown-body u {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  #maps-editor {
+    @apply min-w-0 overflow-visible;
+  }
+
+  .game-map {
+    @apply my-4 overflow-hidden rounded-xl border;
+    border-color: rgb(var(--border-subtle));
+    background-color: rgb(var(--surface-muted) / 0.35);
+  }
+
+  .game-map-header {
+    @apply flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3;
+    border-color: rgb(var(--border-subtle));
+  }
+
+  .game-map-title {
+    @apply text-sm font-semibold;
+    color: rgb(var(--text-heading));
+  }
+
+  .game-map-body {
+    @apply flex justify-center p-4;
+  }
+
+  .game-map-frame {
+    @apply relative max-w-full rounded-lg border;
+    border-color: rgb(var(--border-subtle));
+    background-color: rgb(var(--surface));
+  }
+
+  .game-map-viewport {
+    @apply h-full w-full;
+  }
+
+  .game-map-viewport.is-centered {
+    @apply flex items-center justify-center;
+    overflow: hidden;
+  }
+
+  .game-map-viewport:not(.is-centered) {
+    overflow: auto;
+  }
+
+  .game-map-stage {
+    @apply relative inline-block leading-none;
+  }
+
+  .game-map-image {
+    @apply block max-w-none select-none;
+  }
+
+  .game-map-point {
+    @apply absolute flex -translate-x-1/2 -translate-y-full flex-col items-center gap-1 border-0 bg-transparent p-0;
+  }
+
+  .game-map-point-pin {
+    @apply block h-3 w-3 rounded-full border-2;
+    border-color: rgb(var(--surface));
+    background-color: rgb(var(--accent));
+    box-shadow: 0 0 0 1px rgb(var(--accent) / 0.35);
+  }
+
+  .game-map-point-label {
+    @apply max-w-[8rem] truncate rounded-md px-2 py-0.5 text-[11px] font-medium;
+    background-color: rgb(var(--surface));
+    color: rgb(var(--text-heading));
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
+  }
+
+
+  .game-map-zoom-controls {
+    @apply pointer-events-none absolute right-2 top-2 z-20 flex items-center gap-1 rounded-md border px-1 py-1 shadow-sm;
+    border-color: rgb(var(--border-subtle));
+    background-color: rgb(var(--surface) / 0.92);
+  }
+
+  .game-map-zoom-btn {
+    @apply pointer-events-auto flex h-7 w-7 items-center justify-center rounded border-0 text-sm transition-colors;
+    color: rgb(var(--text-muted));
+    background-color: transparent;
+  }
+
+  .game-map-zoom-btn:hover {
+    background-color: rgb(var(--hover));
+    color: rgb(var(--text-heading));
+  }
+
+  .game-map-zoom-reset {
+    @apply w-8 text-xs;
+  }
+
+  .game-map-zoom-label {
+    @apply min-w-[3rem] px-1 text-center text-xs font-medium;
+    color: rgb(var(--text-muted));
+  }
+
+  .map-editor-canvas-wrap {
+    @apply overflow-hidden rounded-lg border;
+    border-color: rgb(var(--border-subtle));
+    background-color: rgb(var(--surface));
+  }
+
+  .map-editor-canvas {
+    @apply relative inline-block max-w-full cursor-crosshair leading-none;
+  }
+
+  .map-editor-canvas img {
+    @apply block max-h-[28rem] max-w-full select-none;
+  }
+
+  .map-editor-point {
+    @apply absolute flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-transparent p-0 transition-colors;
+    background-color: rgb(var(--accent));
+  }
+
+  .map-editor-point.is-selected {
+    border-color: rgb(var(--text-heading));
+    box-shadow: 0 0 0 2px rgb(var(--accent) / 0.35);
+  }
+
+  .map-editor-point-pin {
+    @apply block h-2 w-2 rounded-full;
+    background-color: rgb(var(--surface));
+  }
+
+  .map-editor-point-list {
+    @apply m-0 list-none space-y-2 p-0;
+  }
+
+  .map-editor-point-item {
+    @apply flex flex-wrap items-center gap-2 rounded-lg border p-2;
+    border-color: rgb(var(--border-subtle));
+  }
+
+  .map-editor-point-item.is-selected {
+    border-color: rgb(var(--accent));
+    background-color: rgb(var(--hover));
+  }
+
+  .map-editor-point-label {
+    @apply min-w-[10rem] flex-1;
   }
 }

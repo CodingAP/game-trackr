@@ -1,18 +1,28 @@
 import type {
+  CheckboxConnectionsData,
   CompletionTagsData,
+  FullJournalData,
+  GameMapsData,
   JournalExportBundle,
+  JournalExportBundleV1,
   JournalExportImage,
   UploadedImage,
 } from '../types/index.js';
-import { JOURNAL_EXPORT_VERSION } from '../types/index.js';
+import { JOURNAL_EXPORT_VERSION, JOURNAL_EXPORT_VERSION_LEGACY } from '../types/index.js';
+import { extractCheckboxes } from '../markdown/checkboxes.js';
+import { managedToCheckboxItems } from '../markdown/managedCheckboxes.js';
 
 const IMPORT_DRAFT_KEY = 'game-tracking:import-draft';
+const DEFAULT_MAIN_PAGE_ID = 'main';
 
 export interface ImportDraft {
   name: string;
   slug: string;
-  content: string;
+  content?: string;
+  journal?: FullJournalData;
+  checkboxes?: CheckboxConnectionsData;
   completionTags?: CompletionTagsData;
+  maps?: GameMapsData;
 }
 
 export function slugifyJournalName(value: string): string {
@@ -61,8 +71,10 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 export async function buildJournalExportBundle(
   slug: string,
   name: string,
-  content: string,
+  journal: FullJournalData,
+  checkboxes: CheckboxConnectionsData,
   completionTags: CompletionTagsData,
+  maps: GameMapsData,
   uploadedImages: UploadedImage[],
 ): Promise<JournalExportBundle> {
   const images: JournalExportImage[] = await Promise.all(
@@ -88,10 +100,54 @@ export async function buildJournalExportBundle(
     exportedAt: new Date().toISOString(),
     name,
     slug,
-    content,
+    journal,
+    checkboxes,
     completionTags,
+    maps,
     images,
   };
+}
+
+export function migrateV1BundleToV2(bundle: JournalExportBundleV1): {
+  journal: FullJournalData;
+  checkboxes: CheckboxConnectionsData;
+  completionTags: CompletionTagsData;
+} {
+  const legacyItems = extractCheckboxes(bundle.content);
+  const tagIdsByCheckboxId = new Map<string, string[]>();
+
+  for (const tag of bundle.completionTags.tags) {
+    for (const checkboxId of tag.checkboxIds ?? []) {
+      const existing = tagIdsByCheckboxId.get(checkboxId) ?? [];
+      existing.push(tag.id);
+      tagIdsByCheckboxId.set(checkboxId, existing);
+    }
+  }
+
+  const checkboxes: CheckboxConnectionsData = {
+    checkboxes: legacyItems.map((item) => ({
+      id: item.id,
+      label: item.label,
+      parentId: item.parentId,
+      tagIds: tagIdsByCheckboxId.get(item.id) ?? [],
+    })),
+  };
+
+  const journal: FullJournalData = {
+    version: 2,
+    pages: [{ id: DEFAULT_MAIN_PAGE_ID, name: 'Main', order: 0 }],
+    contents: { [DEFAULT_MAIN_PAGE_ID]: bundle.content },
+  };
+
+  const completionTags: CompletionTagsData = {
+    tags: bundle.completionTags.tags.map(({ id, name, showInSummary }) => ({
+      id,
+      name,
+      showInSummary: showInSummary ?? false,
+    })),
+  };
+
+  return { journal, checkboxes, completionTags };
 }
 
 export function setImportDraft(draft: ImportDraft): void {
@@ -106,7 +162,7 @@ export function consumeImportDraft(): ImportDraft | null {
 
   try {
     const draft = JSON.parse(raw) as ImportDraft;
-    if (!draft.name || !draft.slug || typeof draft.content !== 'string') {
+    if (!draft.name || !draft.slug) {
       return null;
     }
     return draft;
@@ -115,15 +171,35 @@ export function consumeImportDraft(): ImportDraft | null {
   }
 }
 
+export function isJournalExportBundleV1(value: unknown): value is JournalExportBundleV1 {
+  if (!value || typeof value !== 'object') return false;
+
+  const record = value as Record<string, unknown>;
+  return (
+    record.version === JOURNAL_EXPORT_VERSION_LEGACY &&
+    typeof record.content === 'string' &&
+    typeof record.name === 'string' &&
+    typeof record.slug === 'string' &&
+    record.completionTags !== null &&
+    typeof record.completionTags === 'object' &&
+    Array.isArray((record.completionTags as CompletionTagsData).tags) &&
+    Array.isArray(record.images)
+  );
+}
+
 export function isJournalExportBundle(value: unknown): value is JournalExportBundle {
   if (!value || typeof value !== 'object') return false;
 
   const record = value as Record<string, unknown>;
   return (
     record.version === JOURNAL_EXPORT_VERSION &&
-    typeof record.content === 'string' &&
-    typeof record.name === 'string' &&
-    typeof record.slug === 'string' &&
+    record.journal !== null &&
+    typeof record.journal === 'object' &&
+    Array.isArray((record.journal as FullJournalData).pages) &&
+    typeof (record.journal as FullJournalData).contents === 'object' &&
+    record.checkboxes !== null &&
+    typeof record.checkboxes === 'object' &&
+    Array.isArray((record.checkboxes as CheckboxConnectionsData).checkboxes) &&
     record.completionTags !== null &&
     typeof record.completionTags === 'object' &&
     Array.isArray((record.completionTags as CompletionTagsData).tags) &&
@@ -140,10 +216,26 @@ export async function parseImportFile(file: File): Promise<ParsedImportFile> {
 
   if (lowerName.endsWith('.json') || lowerName.endsWith('.gametrackr.json')) {
     const parsed = JSON.parse(await file.text()) as unknown;
-    if (!isJournalExportBundle(parsed)) {
-      throw new Error('Invalid journal bundle file.');
+    if (isJournalExportBundle(parsed)) {
+      return { kind: 'bundle', bundle: parsed };
     }
-    return { kind: 'bundle', bundle: parsed };
+    if (isJournalExportBundleV1(parsed)) {
+      const migrated = migrateV1BundleToV2(parsed);
+      return {
+        kind: 'bundle',
+        bundle: {
+          version: JOURNAL_EXPORT_VERSION,
+          exportedAt: parsed.exportedAt,
+          name: parsed.name,
+          slug: parsed.slug,
+          journal: migrated.journal,
+          checkboxes: migrated.checkboxes,
+          completionTags: migrated.completionTags,
+          images: parsed.images,
+        },
+      };
+    }
+    throw new Error('Invalid journal bundle file.');
   }
 
   const content = await file.text();
@@ -158,4 +250,10 @@ export async function parseImportFile(file: File): Promise<ParsedImportFile> {
     slug: slugifyJournalName(name),
     content,
   };
+}
+
+export function buildCheckboxItemsForProgress(
+  checkboxes: CheckboxConnectionsData,
+): ReturnType<typeof managedToCheckboxItems> {
+  return managedToCheckboxItems(checkboxes.checkboxes);
 }

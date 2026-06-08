@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import {
   createGame,
   deleteGame,
@@ -9,20 +10,36 @@ import {
   getGame,
   imagesDir,
   importGameJournal,
+  readCheckboxes,
   readCompletionTags,
   readContent,
   readGameIndex,
+  readJournal,
+  readMaps,
   readMobyGamesInfo,
   readMobyGamesLink,
+  writeCheckboxes,
   writeCompletionTags,
   writeContent,
+  writeJournal,
+  writeMaps,
   writeMobyGamesLink,
 } from '../storage/games.js';
 import { filterImageFilenames } from '../storage/imageFiles.js';
 import { requireAuth } from '../middleware/auth.js';
 import { createUploadMiddleware, imagePublicPath } from '../middleware/upload.js';
+import { downloadRemoteImage } from '../services/fetchRemoteImage.js';
 import { isMobyGamesConfigured, fetchMobyGameInfo } from '../services/mobygames.js';
-import type { CompletionTagsData, CreateGameBody, DuplicateGameBody, ImportGameBody, MobyGamesLinkBody } from '../types.js';
+import type {
+  CheckboxConnectionsData,
+  CompletionTagsData,
+  CreateGameBody,
+  DuplicateGameBody,
+  FullJournalData,
+  GameMapsData,
+  ImportGameBody,
+  MobyGamesLinkBody,
+} from '../types.js';
 
 const router = Router();
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -69,8 +86,12 @@ router.post('/import', requireAuth, async (req, res) => {
     res.status(400).json({ error: 'Invalid slug format' });
     return;
   }
-  if (typeof body.content !== 'string' || !body.content.trim()) {
-    res.status(400).json({ error: 'content is required' });
+  if (!body.journal?.pages || !Array.isArray(body.journal.pages) || !body.journal.contents) {
+    res.status(400).json({ error: 'journal.pages and journal.contents are required' });
+    return;
+  }
+  if (!body.checkboxes || !Array.isArray(body.checkboxes.checkboxes)) {
+    res.status(400).json({ error: 'checkboxes.checkboxes array is required' });
     return;
   }
   if (!body.completionTags || !Array.isArray(body.completionTags.tags)) {
@@ -85,8 +106,10 @@ router.post('/import', requireAuth, async (req, res) => {
   try {
     const game = await importGameJournal(body.slug, body.name.trim(), {
       sourceSlug: body.sourceSlug,
-      content: body.content,
+      journal: body.journal,
+      checkboxes: body.checkboxes,
       completionTags: body.completionTags,
+      maps: body.maps,
       images: body.images,
     });
     res.status(201).json(game);
@@ -94,6 +117,64 @@ router.post('/import', requireAuth, async (req, res) => {
     const message = error instanceof Error ? error.message : 'Failed to import game';
     res.status(400).json({ error: message });
   }
+});
+
+router.get('/:slug/journal', async (req, res) => {
+  const slug = readSlug(req);
+  const game = await getGame(slug);
+  if (!game) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  try {
+    const journal = await readJournal(slug);
+    res.json(journal);
+  } catch {
+    res.status(404).json({ error: 'Journal not found' });
+  }
+});
+
+router.get('/:slug/maps', async (req, res) => {
+  const slug = readSlug(req);
+  const game = await getGame(slug);
+  if (!game) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  const maps = await readMaps(slug);
+  res.json(maps);
+});
+
+router.put('/:slug/maps', requireAuth, async (req, res) => {
+  const slug = readSlug(req);
+  const game = await getGame(slug);
+  if (!game) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  const body = req.body as GameMapsData;
+  if (!body || !Array.isArray(body.maps)) {
+    res.status(400).json({ error: 'maps array is required' });
+    return;
+  }
+
+  await writeMaps(slug, body);
+  res.json(body);
+});
+
+router.get('/:slug/checkboxes', async (req, res) => {
+  const slug = readSlug(req);
+  const game = await getGame(slug);
+  if (!game) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  const checkboxes = await readCheckboxes(slug);
+  res.json(checkboxes);
 });
 
 router.get('/:slug/content', async (req, res) => {
@@ -202,6 +283,46 @@ router.get('/:slug', async (req, res) => {
     return;
   }
   res.json(game);
+});
+
+router.put('/:slug/journal', requireAuth, async (req, res) => {
+  const slug = readSlug(req);
+  const game = await getGame(slug);
+  if (!game) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  const body = req.body as FullJournalData;
+  if (!body || !Array.isArray(body.pages) || !body.contents || typeof body.contents !== 'object') {
+    res.status(400).json({ error: 'pages array and contents object are required' });
+    return;
+  }
+
+  const updated = await writeJournal(slug, {
+    version: body.version ?? 2,
+    pages: body.pages,
+    contents: body.contents,
+  });
+  res.json(updated);
+});
+
+router.put('/:slug/checkboxes', requireAuth, async (req, res) => {
+  const slug = readSlug(req);
+  const game = await getGame(slug);
+  if (!game) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  const body = req.body as CheckboxConnectionsData;
+  if (!body || !Array.isArray(body.checkboxes)) {
+    res.status(400).json({ error: 'checkboxes array is required' });
+    return;
+  }
+
+  const updated = await writeCheckboxes(slug, body);
+  res.json(updated);
 });
 
 router.put('/:slug/content', requireAuth, async (req, res) => {
@@ -318,6 +439,35 @@ router.delete('/:slug', requireAuth, async (req, res) => {
 
   await deleteGame(slug);
   res.status(204).send();
+});
+
+router.post('/:slug/images/from-url', requireAuth, async (req, res) => {
+  const slug = readSlug(req);
+  const game = await getGame(slug);
+  if (!game) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  const url = typeof req.body?.url === 'string' ? req.body.url.trim() : '';
+  if (!url) {
+    res.status(400).json({ error: 'URL is required' });
+    return;
+  }
+
+  try {
+    await fs.mkdir(imagesDir(slug), { recursive: true });
+    const { buffer, ext } = await downloadRemoteImage(url);
+    const filename = `${Date.now()}-import${ext}`;
+    await fs.writeFile(path.join(imagesDir(slug), filename), buffer);
+    res.status(201).json({
+      url: imagePublicPath(slug, filename),
+      filename,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Import failed';
+    res.status(400).json({ error: message });
+  }
 });
 
 router.post('/:slug/images', requireAuth, async (req, res, next) => {

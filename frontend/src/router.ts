@@ -19,7 +19,13 @@ function parseHash(hash: string): RouteMatch {
   }
 
   if (view === 'viewer' && rest[0]) {
-    return { view: 'viewer', params: { slug: rest[0] } };
+    return {
+      view: 'viewer',
+      params: {
+        slug: rest[0],
+        ...(rest[1] ? { page: rest[1] } : {}),
+      },
+    };
   }
 
   if (view === 'settings') {

@@ -10,6 +10,7 @@ import {
   slugifyJournalName,
 } from '../utils/journalBundle.js';
 import { navigate } from '../router.js';
+import { iconLabel } from './icons.js';
 
 async function resolveImportTarget(
   slug: string,
@@ -72,8 +73,10 @@ export function wireImportGameButton(container: HTMLElement): () => void {
         slug: target.slug,
         name: target.name,
         sourceSlug: parsed.bundle.slug,
-        content: parsed.bundle.content,
+        journal: parsed.bundle.journal,
+        checkboxes: parsed.bundle.checkboxes,
         completionTags: parsed.bundle.completionTags,
+        maps: parsed.bundle.maps,
         images: parsed.bundle.images,
       });
       navigate(`/viewer/${game.slug}`);
@@ -97,7 +100,7 @@ export function wireImportGameButton(container: HTMLElement): () => void {
 
 export function renderImportGameControls(): string {
   return `
-    <button type="button" class="btn-secondary" data-action="import-game">Import</button>
+    <button type="button" class="btn-secondary" data-action="import-game">${iconLabel('import', 'Import')}</button>
     <input
       type="file"
       data-action="import-game-file"

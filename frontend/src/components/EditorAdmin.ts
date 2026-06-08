@@ -7,30 +7,36 @@ import {
 import { requireAuth } from './AuthPrompt.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from './CollapsiblePanel.js';
 import { buildJournalExportBundle, downloadJournalBundle } from '../utils/journalBundle.js';
-import type { CompletionTagsData } from '../types/index.js';
+import type {
+  CheckboxConnectionsData,
+  CompletionTagsData,
+  FullJournalData,
+  GameMapsData,
+} from '../types/index.js';
 import { navigate } from '../router.js';
+import { iconLabel } from './icons.js';
 
 export function mountEditorAdmin(
   host: HTMLElement,
   slug: string,
   gameName: string,
-  getContent: () => string,
+  getJournal: () => FullJournalData,
+  getCheckboxes: () => CheckboxConnectionsData,
   getCompletionTags: () => CompletionTagsData,
+  getMaps: () => GameMapsData,
 ): () => void {
   host.innerHTML = `
     <div class="space-y-4">
       ${renderCollapsiblePanel({
         title: 'Export',
         content: `
-          <p class="text-muted text-sm">Download this journal's markdown, completion tags, and uploaded images as a <code class="text-xs">.gametrackr.json</code> file.</p>
-          <button type="button" class="btn-secondary" data-action="export-journal">Export journal</button>
+          <button type="button" class="btn-secondary" data-action="export-journal">${iconLabel('download', 'Export journal')}</button>
           <p id="admin-export-status" class="text-muted text-sm"></p>
         `,
       })}
       ${renderCollapsiblePanel({
         title: 'Duplicate',
         content: `
-          <p class="text-muted text-sm">Create a copy of this game journal with a new slug.</p>
           <div class="grid gap-4 sm:grid-cols-2">
             <label class="block">
               <span class="label">New game name</span>
@@ -41,7 +47,7 @@ export function mountEditorAdmin(
               <input type="text" id="duplicate-slug" class="input" value="${escapeHtml(slug)}-copy" pattern="[a-z0-9]+(-[a-z0-9]+)*" />
             </label>
           </div>
-          <button type="button" class="btn-secondary" data-action="duplicate">Duplicate game</button>
+          <button type="button" class="btn-secondary" data-action="duplicate">${iconLabel('copy', 'Duplicate game')}</button>
           <p id="admin-duplicate-status" class="text-muted text-sm"></p>
         `,
       })}
@@ -49,8 +55,7 @@ export function mountEditorAdmin(
         title: 'Delete',
         className: 'border-red-500/40',
         content: `
-          <p class="text-muted text-sm">Permanently delete this game, its markdown, images, and completion tags.</p>
-          <button type="button" class="btn-danger" data-action="delete">Delete game</button>
+          <button type="button" class="btn-danger" data-action="delete">${iconLabel('trash', 'Delete game')}</button>
           <p id="admin-delete-status" class="text-muted text-sm"></p>
         `,
       })}
@@ -69,8 +74,10 @@ export function mountEditorAdmin(
       const bundle = await buildJournalExportBundle(
         slug,
         gameName,
-        getContent(),
+        getJournal(),
+        getCheckboxes(),
         getCompletionTags(),
+        getMaps(),
         images,
       );
       downloadJournalBundle(bundle);

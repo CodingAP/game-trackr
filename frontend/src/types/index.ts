@@ -1,12 +1,71 @@
 export interface CompletionTag {
   id: string;
   name: string;
-  checkboxIds: string[];
   showInSummary?: boolean;
+  /** @deprecated v1 only */
+  checkboxIds?: string[];
 }
 
 export interface CompletionTagsData {
   tags: CompletionTag[];
+}
+
+export interface JournalPage {
+  id: string;
+  name: string;
+  order: number;
+}
+
+export interface FullJournalData {
+  version: number;
+  pages: JournalPage[];
+  contents: Record<string, string>;
+}
+
+export interface ManagedCheckbox {
+  id: string;
+  label: string;
+  parentId: string | null;
+  tagIds: string[];
+}
+
+export interface CheckboxConnectionsData {
+  checkboxes: ManagedCheckbox[];
+}
+
+export interface CheckboxConnectionsData {
+  checkboxes: ManagedCheckbox[];
+}
+
+export interface MapViewport {
+  width: number;
+  height: number;
+}
+
+export interface MapScrollPosition {
+  x: number;
+  y: number;
+}
+
+export interface MapPoint {
+  id: string;
+  x: number;
+  y: number;
+  label: string;
+}
+
+export interface GameMap {
+  id: string;
+  name: string;
+  imageUrl: string;
+  imageFilename: string;
+  viewport: MapViewport;
+  start: MapScrollPosition;
+  points: MapPoint[];
+}
+
+export interface GameMapsData {
+  maps: GameMap[];
 }
 
 export type ThemeId = 'dark' | 'light' | 'midnight' | 'forest';
@@ -91,7 +150,7 @@ export interface ImageViewportSettings {
 
 export type ViewName = 'library' | 'editor' | 'viewer' | 'settings';
 
-export type EditorTabId = 'content' | 'images' | 'tags' | 'admin';
+export type EditorTabId = 'content' | 'images' | 'maps' | 'checkboxes' | 'tags' | 'admin';
 
 export interface RouteMatch {
   view: ViewName;
@@ -135,7 +194,8 @@ export interface MobyGamesGameResponse {
   info: MobyGamesGameInfo | null;
 }
 
-export const JOURNAL_EXPORT_VERSION = 1;
+export const JOURNAL_EXPORT_VERSION = 2;
+export const JOURNAL_EXPORT_VERSION_LEGACY = 1;
 
 export interface JournalExportImage {
   filename: string;
@@ -143,8 +203,8 @@ export interface JournalExportImage {
   data: string;
 }
 
-export interface JournalExportBundle {
-  version: typeof JOURNAL_EXPORT_VERSION;
+export interface JournalExportBundleV1 {
+  version: typeof JOURNAL_EXPORT_VERSION_LEGACY;
   exportedAt: string;
   name: string;
   slug: string;
@@ -153,12 +213,26 @@ export interface JournalExportBundle {
   images: JournalExportImage[];
 }
 
+export interface JournalExportBundle {
+  version: typeof JOURNAL_EXPORT_VERSION;
+  exportedAt: string;
+  name: string;
+  slug: string;
+  journal: FullJournalData;
+  checkboxes: CheckboxConnectionsData;
+  completionTags: CompletionTagsData;
+  maps?: GameMapsData;
+  images: JournalExportImage[];
+}
+
 export interface ImportGameRequest {
   slug: string;
   name: string;
   sourceSlug?: string;
-  content: string;
+  journal: FullJournalData;
+  checkboxes: CheckboxConnectionsData;
   completionTags: CompletionTagsData;
+  maps?: GameMapsData;
   images: JournalExportImage[];
 }
 

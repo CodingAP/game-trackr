@@ -6,6 +6,7 @@ import {
   unlinkMobyGamesEntry,
 } from '../api/client.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from './CollapsiblePanel.js';
+import { iconLabel } from './icons.js';
 import type { MobyGamesGameInfo, MobyGamesSearchHit } from '../types/index.js';
 
 function escapeHtml(value: string): string {
@@ -26,9 +27,9 @@ function renderLinkedState(info: MobyGamesGameInfo): string {
         </div>
         <div class="flex flex-wrap gap-2">
           <a href="${escapeHtml(info.mobyUrl)}" class="btn-secondary text-xs" target="_blank" rel="noopener noreferrer">
-            Open on MobyGames
+            ${iconLabel('external-link', 'Open on MobyGames')}
           </a>
-          <button type="button" class="btn-secondary text-xs" data-action="moby-unlink">Unlink</button>
+          <button type="button" class="btn-secondary text-xs" data-action="moby-unlink">${iconLabel('close', 'Unlink')}</button>
         </div>
       </div>
     </div>
@@ -78,9 +79,6 @@ export function mountMobyGamesAdmin(host: HTMLElement, slug: string): () => void
     host.innerHTML = renderCollapsiblePanel({
       title: 'MobyGames',
       content: `
-        <p class="text-muted text-sm">
-          Link this journal to a MobyGames entry to show box art, release info, and description in the viewer.
-        </p>
         <div id="moby-admin-status" class="text-sm text-muted"></div>
         <div id="moby-admin-linked"></div>
         <div id="moby-admin-search-wrap" class="space-y-3" hidden>
@@ -92,7 +90,7 @@ export function mountMobyGamesAdmin(host: HTMLElement, slug: string): () => void
             <span class="label">Or paste MobyGames URL / game ID</span>
             <div class="flex flex-wrap gap-2">
               <input type="text" id="moby-reference" class="input flex-1 min-w-[12rem]" placeholder="https://www.mobygames.com/game/... or 12345" />
-              <button type="button" class="btn-secondary" data-action="moby-link-reference">Attach</button>
+              <button type="button" class="btn-secondary" data-action="moby-link-reference">${iconLabel('plus', 'Attach')}</button>
             </div>
           </label>
           <div id="moby-admin-results"></div>
@@ -121,7 +119,7 @@ export function mountMobyGamesAdmin(host: HTMLElement, slug: string): () => void
           <div class="mobygames-linked">
             <div class="flex flex-wrap items-center justify-between gap-3">
               <p class="text-sm text-muted">Linked to MobyGames ID ${linkedGameId}</p>
-              <button type="button" class="btn-secondary text-xs" data-action="moby-unlink">Unlink</button>
+              <button type="button" class="btn-secondary text-xs" data-action="moby-unlink">${iconLabel('close', 'Unlink')}</button>
             </div>
           </div>
         `

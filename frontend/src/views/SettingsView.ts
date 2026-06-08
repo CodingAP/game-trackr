@@ -13,6 +13,7 @@ import {
 } from '../storage/settings.js';
 import { THEME_OPTIONS } from '../types/index.js';
 import type { ThemeId } from '../types/index.js';
+import { iconLabel } from '../components/icons.js';
 
 export function renderSettings(container: HTMLElement): () => void {
   const viewportSettings = getImageViewportSettings();
@@ -73,7 +74,7 @@ export function renderSettings(container: HTMLElement): () => void {
         <span>Scale images to fit viewport</span>
       </label>
       <div class="flex items-center gap-3">
-        <button type="submit" class="btn-primary">Save image settings</button>
+        <button type="submit" class="btn-primary">${iconLabel('save', 'Save image settings')}</button>
         <span id="image-settings-status" class="text-muted text-sm"></span>
       </div>
     </form>
@@ -91,7 +92,7 @@ export function renderSettings(container: HTMLElement): () => void {
         : '<p class="hint mb-4">No local data saved yet.</p>'
     }
     <div class="backup-actions">
-      <button type="button" id="export-data" class="btn-primary">Download backup</button>
+      <button type="button" id="export-data" class="btn-primary">${iconLabel('download', 'Download backup')}</button>
     </div>
     <form id="import-data-form" class="backup-import mt-4 space-y-3">
       <label class="block">
@@ -99,7 +100,7 @@ export function renderSettings(container: HTMLElement): () => void {
         <input type="file" id="import-data-file" class="input file-input" accept="application/json,.json" />
       </label>
       <div class="flex flex-wrap items-center gap-3">
-        <button type="submit" class="btn-secondary">Import backup</button>
+        <button type="submit" class="btn-secondary">${iconLabel('import', 'Import backup')}</button>
         <span id="backup-status" class="text-muted text-sm"></span>
       </div>
     </form>

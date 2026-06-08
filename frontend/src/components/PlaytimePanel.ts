@@ -11,6 +11,7 @@ import {
   formatPlaytimeDuration,
   formatPlaytimeTimestamp,
 } from '../utils/playtimeFormat.js';
+import { icon, iconLabel } from './icons.js';
 
 function escapeHtml(value: string): string {
   return value
@@ -60,7 +61,7 @@ export function renderPlaytimeSectionHtml(entries: PlaytimeEntry[]): string {
               .join('')}
           </select>
         </label>
-        <button type="submit" class="btn-secondary playtime-submit">Log session</button>
+        <button type="submit" class="btn-secondary playtime-submit">${iconLabel('clock', 'Log session')}</button>
       </form>
 
       ${
@@ -84,7 +85,7 @@ export function renderPlaytimeSectionHtml(entries: PlaytimeEntry[]): string {
                         data-entry-id="${escapeHtml(entry.id)}"
                         aria-label="Remove session"
                       >
-                        Remove
+                        ${icon('trash', 'ui-icon ui-icon-sm')}
                       </button>
                     </li>
                   `,

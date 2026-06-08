@@ -1,11 +1,13 @@
-import { fetchGames, fetchGameContent, fetchMobyGamesForGame } from '../api/client.js';
+import { fetchCheckboxConnections, fetchGames, fetchMobyGamesForGame } from '../api/client.js';
 import { renderImportGameControls, wireImportGameButton } from '../components/ImportGameButton.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from '../components/CollapsiblePanel.js';
 import { renderLibraryMobyHtml } from '../components/GameInfoPanel.js';
-import { extractCheckboxes, getProgressCheckboxes, isCheckboxComplete, buildCheckboxIndex } from '../markdown/checkboxes.js';
+import { getProgressCheckboxes, isCheckboxComplete, buildCheckboxIndex } from '../markdown/checkboxes.js';
 import { isLocallyAuthenticated } from '../storage/auth.js';
 import { getProgress } from '../storage/progress.js';
+import { buildCheckboxItemsForProgress } from '../utils/journalBundle.js';
 import { navigate } from '../router.js';
+import { iconLabel } from '../components/icons.js';
 
 function renderLibraryHeaderActions(signedIn: boolean): string {
   if (!signedIn) return '';
@@ -13,7 +15,7 @@ function renderLibraryHeaderActions(signedIn: boolean): string {
   return `
     <div class="library-header-actions">
       ${renderImportGameControls()}
-      <button type="button" id="create-game" class="btn-primary">Create Game</button>
+      <button type="button" id="create-game" class="btn-primary">${iconLabel('plus', 'Create Game')}</button>
     </div>
   `;
 }
@@ -37,7 +39,7 @@ function renderEmptyLibrary(signedIn: boolean): string {
         <p class="text-muted mb-4">Create your first game journal to get started.</p>
         <div class="library-header-actions">
           ${renderImportGameControls()}
-          <button type="button" id="create-first" class="btn-primary">Create Game</button>
+          <button type="button" id="create-first" class="btn-primary">${iconLabel('plus', 'Create Game')}</button>
         </div>
       </div>
     </div>
@@ -72,8 +74,8 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
         let progressLabel = 'No progress yet';
         let mobyHtml = '';
 
-        const [contentResult, mobyResult] = await Promise.allSettled([
-          fetchGameContent(game.slug),
+        const [checkboxesResult, mobyResult] = await Promise.allSettled([
+          fetchCheckboxConnections(game.slug),
           fetchMobyGamesForGame(game.slug),
         ]);
 
@@ -81,9 +83,9 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
           mobyHtml = renderLibraryMobyHtml(mobyResult.value.info);
         }
 
-        if (contentResult.status === 'fulfilled') {
+        if (checkboxesResult.status === 'fulfilled') {
           try {
-            const checkboxes = extractCheckboxes(contentResult.value);
+            const checkboxes = buildCheckboxItemsForProgress(checkboxesResult.value);
             const progressCheckboxes = getProgressCheckboxes(checkboxes);
             const progress = getProgress(game.slug);
             const index = buildCheckboxIndex(checkboxes);
@@ -102,7 +104,7 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
         }
 
         const editButton = signedIn
-          ? `<button type="button" class="btn-secondary" data-edit="${game.slug}">Edit</button>`
+          ? `<button type="button" class="btn-secondary" data-edit="${game.slug}">${iconLabel('edit', 'Edit')}</button>`
           : '';
 
         return renderCollapsiblePanel({
@@ -113,7 +115,7 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
               ${mobyHtml}
               <p class="text-sm text-status">${progressLabel}</p>
               <div class="library-game-actions mt-auto">
-                <button type="button" class="btn-primary" data-view="${game.slug}">View</button>
+                <button type="button" class="btn-primary" data-view="${game.slug}">${iconLabel('eye', 'View')}</button>
                 ${editButton}
               </div>
             </div>

@@ -1,4 +1,11 @@
-import { fetchCompletionTags, fetchGame, fetchGameContent, fetchMobyGamesForGame } from '../api/client.js';
+import {
+  fetchCheckboxConnections,
+  fetchCompletionTags,
+  fetchGame,
+  fetchGameJournal,
+  fetchMaps,
+  fetchMobyGamesForGame,
+} from '../api/client.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from '../components/CollapsiblePanel.js';
 import { renderGameInfoHtml, wireGameInfoPanel } from '../components/GameInfoPanel.js';
 import { renderNotesPanelHtml, wireNotesPanel } from '../components/NotesPanel.js';
@@ -14,17 +21,26 @@ import { applyImageSources, applyImageViewports } from '../markdown/images.js';
 import {
   buildCheckboxIndex,
   collectDescendantLeaves,
-  collectTaskListItems,
-  extractCheckboxes,
   isCheckboxComplete,
 } from '../markdown/checkboxes.js';
+import {
+  collectManagedCheckboxInputs,
+  managedToCheckboxItems,
+  preprocessManagedCheckboxMarkdown,
+} from '../markdown/managedCheckboxes.js';
+import {
+  mountGameMapBlocks,
+  preprocessMapMarkdown,
+  wireGameMaps,
+} from '../markdown/gameMaps.js';
 import { renderMarkdown } from '../markdown/render.js';
-import { buildToc, renderTocNav, wireTocNav } from '../markdown/toc.js';
+import { buildToc, renderJournalTocNav, wireTocNav } from '../markdown/toc.js';
 import { getImageViewportSettings } from '../storage/settings.js';
 import { getProgress, setCheckboxStates } from '../storage/progress.js';
 import { isLocallyAuthenticated } from '../storage/auth.js';
-import type { CompletionTag } from '../types/index.js';
+import type { CompletionTag, FullJournalData, ManagedCheckbox } from '../types/index.js';
 import { navigate } from '../router.js';
+import { icon, iconLabel } from '../components/icons.js';
 
 export async function renderViewer(
   container: HTMLElement,
@@ -39,10 +55,12 @@ export async function renderViewer(
   container.innerHTML = '<p class="text-muted">Loading journal...</p>';
 
   try {
-    const [game, content, tagsData, mobyData] = await Promise.all([
+    const [game, journal, checkboxesData, tagsData, mapsData, mobyData] = await Promise.all([
       fetchGame(slug),
-      fetchGameContent(slug),
+      fetchGameJournal(slug),
+      fetchCheckboxConnections(slug),
       fetchCompletionTags(slug),
+      fetchMaps(slug),
       fetchMobyGamesForGame(slug).catch(() => ({
         configured: false,
         link: null,
@@ -50,15 +68,28 @@ export async function renderViewer(
       })),
     ]);
     const tags = tagsData.tags;
-    const checkboxes = extractCheckboxes(content);
+    const managed = checkboxesData.checkboxes;
+    const checkboxes = managedToCheckboxItems(managed);
     const progress = getProgress(slug);
     const viewportSettings = getImageViewportSettings();
     const gameInfoHtml = mobyData.info ? renderGameInfoHtml(mobyData.info) : '';
-    const summaryHtml = renderCompletionSummaryHtml(slug, tags, checkboxes, progress.checkedItems);
+    const summaryHtml = renderCompletionSummaryHtml(
+      slug,
+      tags,
+      checkboxes,
+      progress.checkedItems,
+      managed,
+    );
+
+    const sortedPages = [...journal.pages].sort((a, b) => a.order - b.order);
+    let activePageId = params.page ?? sortedPages[0]?.id ?? 'main';
+    if (!sortedPages.some((page) => page.id === activePageId)) {
+      activePageId = sortedPages[0]?.id ?? 'main';
+    }
 
     const signedIn = isLocallyAuthenticated();
     const editButton = signedIn
-      ? '<button type="button" id="edit-game" class="btn-secondary">Edit</button>'
+      ? `<button type="button" id="edit-game" class="btn-secondary">${iconLabel('edit', 'Edit')}</button>`
       : '';
 
     container.innerHTML = `
@@ -93,7 +124,7 @@ export async function renderViewer(
         </div>
 
         <button type="button" id="return-top" class="return-top" aria-label="Return to top">
-          <span aria-hidden="true">↑</span>
+          ${icon('arrow-up', 'ui-icon ui-icon-lg')}
         </button>
       </div>
     `;
@@ -104,21 +135,39 @@ export async function renderViewer(
     wireGameInfoPanel(container);
 
     const body = container.querySelector('#markdown-body') as HTMLElement;
-    body.innerHTML = renderMarkdown(preprocessTagProgressMarkdown(content));
-    mountTagProgressBlocks(body, tags, checkboxes, progress.checkedItems);
-    applyImageSources(body);
-    applyImageViewports(body, viewportSettings);
-    wireCheckboxes(body, slug, checkboxes, progress.checkedItems, tags, container);
-
-    const tocEntries = buildToc(body);
     const tocContent = container.querySelector('#toc-content') as HTMLElement;
-    tocContent.innerHTML = renderTocNav(tocEntries);
-
     const returnTopButton = container.querySelector('#return-top') as HTMLElement;
     const viewerTop = container.querySelector('#viewer-top') as HTMLElement;
 
-    const cleanupToc = wireTocNav(tocContent);
-    const cleanupReturnTop = wireReturnToTop(returnTopButton, viewerTop);
+    let cleanupToc: (() => void) | null = null;
+    let cleanupReturnTop = wireReturnToTop(returnTopButton, viewerTop);
+
+    const renderPage = (pageId: string) => {
+      activePageId = pageId;
+      const content = journal.contents[pageId] ?? '';
+      body.innerHTML = renderMarkdown(
+        preprocessMapMarkdown(
+          preprocessTagProgressMarkdown(preprocessManagedCheckboxMarkdown(content)),
+        ),
+      );
+      mountGameMapBlocks(body, mapsData);
+      wireGameMaps(body);
+      mountTagProgressBlocks(body, tags, checkboxes, progress.checkedItems, managed);
+      applyImageSources(body);
+      applyImageViewports(body, viewportSettings);
+      wireCheckboxes(body, slug, checkboxes, progress.checkedItems, tags, managed, container);
+
+      const tocEntries = buildToc(body);
+      tocContent.innerHTML = renderJournalTocNav(sortedPages, pageId, tocEntries, slug);
+      cleanupToc?.();
+      cleanupToc = wireTocNav(tocContent, {
+        onPageChange: (nextPageId) => {
+          navigate(`/viewer/${slug}/${nextPageId}`);
+        },
+      });
+    };
+
+    renderPage(activePageId);
 
     const onEdit = () => {
       navigate(`/editor/${slug}`);
@@ -132,7 +181,7 @@ export async function renderViewer(
       cleanupCollapsible();
       cleanupPlaytime();
       cleanupNotes();
-      cleanupToc();
+      cleanupToc?.();
       cleanupReturnTop();
       if (signedIn) {
         container.querySelector('#edit-game')?.removeEventListener('click', onEdit);
@@ -143,7 +192,7 @@ export async function renderViewer(
       <div class="panel border-red-500/40 max-w-3xl mx-auto">
         <h2 class="text-xl font-semibold mb-2">Failed to load journal</h2>
         <p class="text-muted mb-4">${escapeHtml(error instanceof Error ? error.message : 'Unknown error')}</p>
-        <button type="button" id="back-library" class="btn-secondary">Back to Library</button>
+        <button type="button" id="back-library" class="btn-secondary">${iconLabel('library', 'Back to Library')}</button>
       </div>
     `;
     const onBack = () => navigate('/');
@@ -157,24 +206,25 @@ export async function renderViewer(
 function wireCheckboxes(
   container: HTMLElement,
   gameSlug: string,
-  checkboxes: ReturnType<typeof extractCheckboxes>,
+  checkboxes: ReturnType<typeof managedToCheckboxItems>,
   checkedItems: Record<string, boolean>,
   tags: CompletionTag[],
+  managed: ManagedCheckbox[],
   root: HTMLElement,
 ): void {
   const index = buildCheckboxIndex(checkboxes);
-  const listItems = collectTaskListItems(container);
+  const inputs = collectManagedCheckboxInputs(container);
 
   const syncCheckboxVisuals = (state: Record<string, boolean>) => {
-    listItems.forEach((li, itemIndex) => {
-      const item = checkboxes[itemIndex];
+    inputs.forEach((input) => {
+      const id = input.dataset.cbId;
+      if (!id) return;
+
+      const item = index.get(id);
       if (!item) return;
 
-      const input = li.querySelector(':scope > input[type="checkbox"]') as HTMLInputElement | null;
-      if (!input) return;
-
-      input.dataset.checkboxId = item.id;
-      input.checked = isCheckboxComplete(item.id, index, state);
+      input.disabled = false;
+      input.checked = isCheckboxComplete(id, index, state);
       input.indeterminate = false;
 
       if (item.childIds.length > 0) {
@@ -189,14 +239,12 @@ function wireCheckboxes(
 
   syncCheckboxVisuals(checkedItems);
 
-  listItems.forEach((li, itemIndex) => {
-    const item = checkboxes[itemIndex];
+  inputs.forEach((input) => {
+    const id = input.dataset.cbId;
+    if (!id) return;
+
+    const item = index.get(id);
     if (!item) return;
-
-    const input = li.querySelector(':scope > input[type="checkbox"]') as HTMLInputElement | null;
-    if (!input) return;
-
-    input.disabled = false;
 
     input.addEventListener('change', () => {
       const targetChecked = input.checked;
@@ -212,7 +260,7 @@ function wireCheckboxes(
 
       const updated = setCheckboxStates(gameSlug, updates);
       syncCheckboxVisuals(updated.checkedItems);
-      refreshProgressUi(root, tags, checkboxes, updated.checkedItems);
+      refreshProgressUi(root, tags, checkboxes, updated.checkedItems, managed);
     });
   });
 }

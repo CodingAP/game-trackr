@@ -1,4 +1,5 @@
 import type { EditorTabId } from '../types/index.js';
+import { EDITOR_TAB_ICONS, iconLabel } from './icons.js';
 
 export interface EditorTab {
   id: EditorTabId;
@@ -23,7 +24,7 @@ export function mountEditorTabs(
               data-tab="${tab.id}"
               aria-selected="false"
             >
-              ${tab.label}
+              ${iconLabel(EDITOR_TAB_ICONS[tab.id] ?? 'pages', tab.label)}
             </button>
           `,
         )
