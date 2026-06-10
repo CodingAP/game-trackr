@@ -31,6 +31,7 @@ import {
 import {
   mountGameMapBlocks,
   preprocessMapMarkdown,
+  syncMapPointCompletionVisuals,
   wireGameMaps,
 } from '../markdown/gameMaps.js';
 import { renderMarkdown } from '../markdown/render.js';
@@ -140,6 +141,7 @@ export async function renderViewer(
     const viewerTop = container.querySelector('#viewer-top') as HTMLElement;
 
     let cleanupToc: (() => void) | null = null;
+    let cleanupGameMaps: (() => void) | null = null;
     let cleanupReturnTop = wireReturnToTop(returnTopButton, viewerTop);
 
     const renderPage = (pageId: string) => {
@@ -150,12 +152,30 @@ export async function renderViewer(
           preprocessTagProgressMarkdown(preprocessManagedCheckboxMarkdown(content)),
         ),
       );
+      cleanupGameMaps?.();
       mountGameMapBlocks(body, mapsData);
-      wireGameMaps(body);
       mountTagProgressBlocks(body, tags, checkboxes, progress.checkedItems, managed);
       applyImageSources(body);
       applyImageViewports(body, viewportSettings);
-      wireCheckboxes(body, slug, checkboxes, progress.checkedItems, tags, managed, container);
+      const syncCheckboxVisuals = wireCheckboxes(
+        body,
+        slug,
+        checkboxes,
+        progress.checkedItems,
+        tags,
+        managed,
+        container,
+      );
+      cleanupGameMaps = wireGameMaps(body, {
+        gameSlug: slug,
+        checkboxes: managed,
+        checkedItems: progress.checkedItems,
+        onProgressUpdate: (checkedItems) => {
+          progress.checkedItems = checkedItems;
+          refreshProgressUi(container, tags, checkboxes, checkedItems, managed);
+          syncCheckboxVisuals(checkedItems);
+        },
+      });
 
       const tocEntries = buildToc(body);
       tocContent.innerHTML = renderJournalTocNav(sortedPages, pageId, tocEntries, slug);
@@ -178,6 +198,7 @@ export async function renderViewer(
     }
 
     return () => {
+      cleanupGameMaps?.();
       cleanupCollapsible();
       cleanupPlaytime();
       cleanupNotes();
@@ -211,7 +232,7 @@ function wireCheckboxes(
   tags: CompletionTag[],
   managed: ManagedCheckbox[],
   root: HTMLElement,
-): void {
+): (state: Record<string, boolean>) => void {
   const index = buildCheckboxIndex(checkboxes);
   const inputs = collectManagedCheckboxInputs(container);
 
@@ -260,9 +281,12 @@ function wireCheckboxes(
 
       const updated = setCheckboxStates(gameSlug, updates);
       syncCheckboxVisuals(updated.checkedItems);
+      syncMapPointCompletionVisuals(container, managed, updated.checkedItems);
       refreshProgressUi(root, tags, checkboxes, updated.checkedItems, managed);
     });
   });
+
+  return syncCheckboxVisuals;
 }
 
 function escapeHtml(value: string): string {

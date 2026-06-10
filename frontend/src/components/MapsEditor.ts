@@ -1,11 +1,27 @@
 import { AuthRequiredError, uploadGameImage } from '../api/client.js';
-import { buildMapMarker } from '../markdown/gameMaps.js';
-import type { GameMap, GameMapsData } from '../types/index.js';
+import {
+  buildMapMarker,
+  defaultPointTypes,
+  getImagePercentFromClick,
+  normalizeGameMap,
+  renderMapZoomControls,
+  resolvePointType,
+  wireMapZoom,
+} from '../markdown/gameMaps.js';
+import type {
+  CheckboxConnectionsData,
+  GameMap,
+  GameMapsData,
+  ManagedCheckbox,
+  MapPointType,
+} from '../types/index.js';
 import type { MarkdownEditorHandle } from '../types/markdownEditor.js';
 import { requireAuth } from './AuthPrompt.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from './CollapsiblePanel.js';
 import { renderListSearchBar, wireListSearch } from './listSearch.js';
 import { iconLabel } from './icons.js';
+
+const POINT_TYPE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 function escapeHtml(value: string): string {
   return value
@@ -32,6 +48,23 @@ function slugifyMapId(name: string, existing: Set<string>): string {
   return `${base}-${counter}`;
 }
 
+function slugifyPointTypeId(name: string, existing: Set<string>): string {
+  const base =
+    name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'type';
+
+  if (!existing.has(base)) return base;
+
+  let counter = 2;
+  while (existing.has(`${base}-${counter}`)) {
+    counter += 1;
+  }
+  return `${base}-${counter}`;
+}
+
 function defaultMap(existing: Set<string>): GameMap {
   const name = 'New map';
   return {
@@ -41,6 +74,7 @@ function defaultMap(existing: Set<string>): GameMap {
     imageFilename: '',
     viewport: { width: 800, height: 600 },
     start: { x: 0, y: 0 },
+    pointTypes: defaultPointTypes(),
     points: [],
   };
 }
@@ -50,19 +84,97 @@ function readNumber(value: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function normalizeMap(map: GameMap): GameMap {
-  return {
-    id: map.id,
-    name: map.name,
-    imageUrl: map.imageUrl,
-    imageFilename: map.imageFilename,
-    viewport: map.viewport ?? { width: 800, height: 600 },
-    start: map.start ?? { x: 0, y: 0 },
-    points: Array.isArray(map.points) ? map.points : [],
-  };
+function normalizeColor(value: string, fallback: string): string {
+  const trimmed = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed : fallback;
 }
 
-function renderMapEditorBody(map: GameMap, selectedPointId: string | null): string {
+function renderPointTypeOptions(map: GameMap, selectedTypeId: string | null | undefined): string {
+  return map.pointTypes
+    .map(
+      (type) => `
+        <option value="${escapeHtml(type.id)}"${selectedTypeId === type.id ? ' selected' : ''}>
+          ${escapeHtml(type.name.trim() || type.id)}
+        </option>
+      `,
+    )
+    .join('');
+}
+
+function renderCheckboxOptions(
+  checkboxes: ManagedCheckbox[],
+  selectedCheckboxId: string | null | undefined,
+): string {
+  return `
+    <option value="">None</option>
+    ${checkboxes
+      .map(
+        (checkbox) => `
+          <option value="${escapeHtml(checkbox.id)}"${
+            selectedCheckboxId === checkbox.id ? ' selected' : ''
+          }>
+            ${escapeHtml(checkbox.label.trim() || checkbox.id)}
+          </option>
+        `,
+      )
+      .join('')}
+  `;
+}
+
+function renderPointTypesEditor(map: GameMap): string {
+  return `
+    <div class="map-editor-point-types mb-3">
+      <span class="label">Point types</span>
+      <p class="hint mt-1">Define custom point types for the map legend. Each point can use one type.</p>
+      <ul class="map-editor-point-type-list mt-2">
+        ${map.pointTypes
+          .map(
+            (type) => `
+              <li class="map-editor-point-type-item">
+                <input
+                  type="text"
+                  class="input map-editor-point-type-name"
+                  data-map-point-type-name="${map.id}"
+                  data-type-id="${type.id}"
+                  value="${escapeHtml(type.name)}"
+                  placeholder="Type name"
+                />
+                <input
+                  type="color"
+                  class="map-editor-point-type-color"
+                  data-map-point-type-color="${map.id}"
+                  data-type-id="${type.id}"
+                  value="${escapeHtml(type.color)}"
+                  title="Type color"
+                />
+                <button
+                  type="button"
+                  class="btn-secondary text-xs"
+                  data-action="remove-point-type"
+                  data-map-id="${map.id}"
+                  data-type-id="${type.id}"
+                  ${map.pointTypes.length <= 1 ? 'disabled' : ''}
+                >${iconLabel('trash', 'Remove', 'ui-icon ui-icon-sm')}</button>
+              </li>
+            `,
+          )
+          .join('')}
+      </ul>
+      <button
+        type="button"
+        class="btn-secondary text-xs mt-2"
+        data-action="add-point-type"
+        data-map-id="${map.id}"
+      >${iconLabel('plus', 'Add type', 'ui-icon ui-icon-sm')}</button>
+    </div>
+  `;
+}
+
+function renderMapEditorBody(
+  map: GameMap,
+  selectedPointId: string | null,
+  checkboxes: ManagedCheckbox[],
+): string {
   return `
     <div class="grid gap-3 sm:grid-cols-2 mb-3">
       <label class="block">
@@ -112,30 +224,50 @@ function renderMapEditorBody(map: GameMap, selectedPointId: string | null): stri
       }
     </div>
 
+    ${renderPointTypesEditor(map)}
+
     ${
       map.imageUrl
         ? `
           <div class="map-editor-canvas-wrap mb-3">
-            <div class="map-editor-canvas" data-map-canvas="${map.id}">
-              <img src="${escapeHtml(map.imageUrl)}" alt="" draggable="false" />
-              ${map.points
-                .map(
-                  (point) => `
-                    <button
-                      type="button"
-                      class="map-editor-point${selectedPointId === point.id ? ' is-selected' : ''}"
-                      style="left: ${point.x}%; top: ${point.y}%;"
-                      data-map-point="${map.id}"
-                      data-point-id="${point.id}"
-                      aria-label="${escapeHtml(point.label.trim() || 'Map point')}"
-                    >
-                      <span class="map-editor-point-pin" aria-hidden="true"></span>
-                    </button>
-                  `,
-                )
-                .join('')}
+            <div
+              class="map-editor-frame"
+              style="width: min(100%, ${map.viewport.width}px); height: ${map.viewport.height}px;"
+            >
+              <div class="map-editor-viewport" data-map-viewport="${map.id}">
+                <div class="map-editor-stage">
+                  <img
+                    class="map-editor-image"
+                    src="${escapeHtml(map.imageUrl)}"
+                    alt=""
+                    draggable="false"
+                  />
+                  ${map.points
+                    .map((point) => {
+                      const pointType = resolvePointType(map, point.typeId);
+                      return `
+                        <button
+                          type="button"
+                          class="map-editor-point${selectedPointId === point.id ? ' is-selected' : ''}"
+                          style="left: ${point.x}%; top: ${point.y}%;"
+                          data-map-point="${map.id}"
+                          data-point-id="${point.id}"
+                          aria-label="${escapeHtml(point.label.trim() || 'Map point')}"
+                        >
+                          <span
+                            class="map-editor-point-pin"
+                            style="background-color: ${escapeHtml(pointType.color)};"
+                            aria-hidden="true"
+                          ></span>
+                        </button>
+                      `;
+                    })
+                    .join('')}
+                </div>
+              </div>
+              ${renderMapZoomControls()}
             </div>
-            <p class="hint mt-2">Click the map to add a point. Select a point below to edit or remove it.</p>
+            <p class="hint mt-2">Scroll to pan, use zoom controls or mouse wheel to zoom. Click the map to add a point.</p>
           </div>
         `
         : ''
@@ -160,6 +292,26 @@ function renderMapEditorBody(map: GameMap, selectedPointId: string | null): stri
                         value="${escapeHtml(point.label)}"
                         placeholder="Point label"
                       />
+                      <label class="map-editor-point-field">
+                        <span class="label text-xs">Type</span>
+                        <select
+                          class="input map-editor-point-type"
+                          data-map-point-type="${map.id}"
+                          data-point-id="${point.id}"
+                        >
+                          ${renderPointTypeOptions(map, point.typeId)}
+                        </select>
+                      </label>
+                      <label class="map-editor-point-field">
+                        <span class="label text-xs">Checkbox</span>
+                        <select
+                          class="input map-editor-point-checkbox"
+                          data-map-point-checkbox="${map.id}"
+                          data-point-id="${point.id}"
+                        >
+                          ${renderCheckboxOptions(checkboxes, point.checkboxId)}
+                        </select>
+                      </label>
                       <button
                         type="button"
                         class="btn-secondary text-xs"
@@ -199,12 +351,14 @@ export function mountMapsEditor(
   editor: MarkdownEditorHandle,
   slug: string,
   initial: GameMapsData,
+  getCheckboxes: () => CheckboxConnectionsData,
 ): { getData: () => GameMapsData; cleanup: () => void } {
-  let maps: GameMap[] = structuredClone(initial.maps).map(normalizeMap);
+  let maps: GameMap[] = structuredClone(initial.maps).map(normalizeGameMap);
   const expandedMaps = new Set<string>();
   const selectedPoints = new Map<string, string | null>();
   let searchQuery = '';
   let cleanupSearch = () => {};
+  let cleanupCanvasZoom = () => {};
 
   const syncFromDom = () => {
     host.querySelectorAll('[data-map-name]').forEach((input) => {
@@ -244,10 +398,78 @@ export function mountMapsEditor(
       const point = map?.points.find((entry) => entry.id === pointId);
       if (point) point.label = (input as HTMLInputElement).value;
     });
+
+    host.querySelectorAll('[data-map-point-type]').forEach((select) => {
+      const mapId = (select as HTMLElement).dataset.mapPointType;
+      const pointId = (select as HTMLElement).dataset.pointId;
+      const map = maps.find((entry) => entry.id === mapId);
+      const point = map?.points.find((entry) => entry.id === pointId);
+      if (point) point.typeId = (select as HTMLSelectElement).value || null;
+    });
+
+    host.querySelectorAll('[data-map-point-checkbox]').forEach((select) => {
+      const mapId = (select as HTMLElement).dataset.mapPointCheckbox;
+      const pointId = (select as HTMLElement).dataset.pointId;
+      const map = maps.find((entry) => entry.id === mapId);
+      const point = map?.points.find((entry) => entry.id === pointId);
+      if (point) {
+        const value = (select as HTMLSelectElement).value;
+        point.checkboxId = value || null;
+      }
+    });
+
+    host.querySelectorAll('[data-map-point-type-name]').forEach((input) => {
+      const mapId = (input as HTMLElement).dataset.mapPointTypeName;
+      const typeId = (input as HTMLElement).dataset.typeId;
+      const map = maps.find((entry) => entry.id === mapId);
+      const type = map?.pointTypes.find((entry) => entry.id === typeId);
+      if (type) type.name = (input as HTMLInputElement).value;
+    });
+
+    host.querySelectorAll('[data-map-point-type-color]').forEach((input) => {
+      const mapId = (input as HTMLElement).dataset.mapPointTypeColor;
+      const typeId = (input as HTMLElement).dataset.typeId;
+      const map = maps.find((entry) => entry.id === mapId);
+      const type = map?.pointTypes.find((entry) => entry.id === typeId);
+      if (type) {
+        type.color = normalizeColor((input as HTMLInputElement).value, type.color);
+      }
+    });
+  };
+
+  const wireCanvasZoom = () => {
+    cleanupCanvasZoom();
+    const cleanups: Array<() => void> = [];
+
+    host.querySelectorAll('[data-map-viewport]').forEach((viewportEl) => {
+      const mapId = (viewportEl as HTMLElement).dataset.mapViewport;
+      const map = maps.find((entry) => entry.id === mapId);
+      const frame = viewportEl.closest('.map-editor-frame') as HTMLElement | null;
+      const image = viewportEl.querySelector('.map-editor-image') as HTMLImageElement | null;
+      const zoomLabel = frame?.querySelector('[data-map-zoom-label]') as HTMLElement | null;
+      if (!map || !image || !frame) return;
+
+      cleanups.push(
+        wireMapZoom(viewportEl as HTMLElement, image, {
+          startX: map.start.x,
+          startY: map.start.y,
+          zoomLabel,
+          zoomControlsRoot: frame,
+        }),
+      );
+    });
+
+    cleanupCanvasZoom = () => {
+      cleanups.forEach((cleanup) => cleanup());
+      cleanupCanvasZoom = () => {};
+    };
   };
 
   const render = () => {
     syncFromDom();
+    cleanupCanvasZoom();
+
+    const checkboxes = getCheckboxes().checkboxes;
 
     host.innerHTML = `
       ${maps.length > 0 ? renderListSearchBar({ id: 'maps-search', placeholder: 'Search maps...' }) : ''}
@@ -267,7 +489,7 @@ export function mountMapsEditor(
                       'map-id': map.id,
                       'search-text': `${map.name} ${map.id}`,
                     },
-                    content: renderMapEditorBody(map, selectedPointId),
+                    content: renderMapEditorBody(map, selectedPointId, checkboxes),
                   });
                 })
                 .join('')
@@ -279,6 +501,7 @@ export function mountMapsEditor(
     `;
 
     wireStaticActions();
+    wireCanvasZoom();
 
     cleanupSearch();
     const search = wireListSearch(host, {
@@ -309,6 +532,47 @@ export function mountMapsEditor(
         maps = maps.filter((entry) => entry.id !== mapId);
         expandedMaps.delete(mapId);
         selectedPoints.delete(mapId);
+        render();
+      });
+    });
+
+    host.querySelectorAll('[data-action="add-point-type"]').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        syncFromDom();
+        const mapId = (button as HTMLElement).dataset.mapId;
+        const map = maps.find((entry) => entry.id === mapId);
+        if (!map) return;
+
+        const existingIds = new Set(map.pointTypes.map((type) => type.id));
+        const color = POINT_TYPE_COLORS[map.pointTypes.length % POINT_TYPE_COLORS.length];
+        const name = `Type ${map.pointTypes.length + 1}`;
+        const type: MapPointType = {
+          id: slugifyPointTypeId(name, existingIds),
+          name,
+          color,
+        };
+        map.pointTypes.push(type);
+        render();
+      });
+    });
+
+    host.querySelectorAll('[data-action="remove-point-type"]').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        syncFromDom();
+        const mapId = (button as HTMLElement).dataset.mapId;
+        const typeId = (button as HTMLElement).dataset.typeId;
+        const map = maps.find((entry) => entry.id === mapId);
+        if (!map || !typeId || map.pointTypes.length <= 1) return;
+
+        const fallbackTypeId = map.pointTypes.find((type) => type.id !== typeId)?.id;
+        if (!fallbackTypeId) return;
+
+        map.pointTypes = map.pointTypes.filter((type) => type.id !== typeId);
+        for (const point of map.points) {
+          if (point.typeId === typeId) point.typeId = fallbackTypeId;
+        }
         render();
       });
     });
@@ -352,31 +616,42 @@ export function mountMapsEditor(
       });
     });
 
-    host.querySelectorAll('[data-map-canvas]').forEach((canvas) => {
+    host.querySelectorAll('[data-map-viewport]').forEach((canvas) => {
       canvas.addEventListener('click', (event) => {
         event.stopPropagation();
         const target = event.target as HTMLElement;
         if (target.closest('[data-map-point]')) return;
 
-        const mapId = (canvas as HTMLElement).dataset.mapCanvas;
+        const mapId = (canvas as HTMLElement).dataset.mapViewport;
         const map = maps.find((entry) => entry.id === mapId);
-        const img = canvas.querySelector('img') as HTMLImageElement | null;
+        const img = canvas.querySelector('.map-editor-image') as HTMLImageElement | null;
         if (!map || !img) return;
 
-        const rect = img.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0) return;
+        const position = getImagePercentFromClick(img, event.clientX, event.clientY);
+        if (!position) return;
 
         syncFromDom();
-        const x = clampPercent(((event.clientX - rect.left) / rect.width) * 100);
-        const y = clampPercent(((event.clientY - rect.top) / rect.height) * 100);
         const point = {
           id: crypto.randomUUID(),
-          x,
-          y,
+          x: clampPercent(position.x),
+          y: clampPercent(position.y),
           label: `Point ${map.points.length + 1}`,
+          typeId: map.pointTypes[0]?.id ?? 'default',
+          checkboxId: null,
         };
         map.points.push(point);
         selectedPoints.set(map.id, point.id);
+        render();
+      });
+    });
+
+    host.querySelectorAll('[data-map-point]').forEach((pointEl) => {
+      pointEl.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const mapId = (pointEl as HTMLElement).dataset.mapPoint;
+        const pointId = (pointEl as HTMLElement).dataset.pointId;
+        if (!mapId || !pointId) return;
+        selectedPoints.set(mapId, pointId);
         render();
       });
     });
@@ -446,11 +721,9 @@ export function mountMapsEditor(
     getData: () => {
       syncFromDom();
       return {
-        maps: maps.map((map) => ({
-          id: map.id,
+        maps: maps.map((map) => normalizeGameMap({
+          ...map,
           name: map.name.trim() || 'Untitled map',
-          imageUrl: map.imageUrl,
-          imageFilename: map.imageFilename,
           viewport: {
             width: Math.max(100, Math.round(map.viewport.width)),
             height: Math.max(100, Math.round(map.viewport.height)),
@@ -464,11 +737,14 @@ export function mountMapsEditor(
             label: point.label.trim(),
             x: clampPercent(point.x),
             y: clampPercent(point.y),
+            typeId: point.typeId ?? map.pointTypes[0]?.id ?? 'default',
+            checkboxId: point.checkboxId || null,
           })),
         })),
       };
     },
     cleanup: () => {
+      cleanupCanvasZoom();
       cleanupSearch();
       cleanupCollapsible();
     },

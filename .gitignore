@@ -6,8 +6,8 @@ public/css/
 .env
 *.log
 
-# Runtime image uploads
-backend/data/games/*/images/*
+# Runtime game data (user content, uploads, etc.)
+backend/data/games/
 
 # Removed Vite frontend artifacts
 frontend/dist/

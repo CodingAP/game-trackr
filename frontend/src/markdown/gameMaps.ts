@@ -1,10 +1,20 @@
-import type { GameMap, GameMapsData } from '../types/index.js';
+import type { GameMap, GameMapsData, ManagedCheckbox, MapPointType } from '../types/index.js';
+import {
+  buildCheckboxIndex,
+  collectDescendantLeaves,
+  isCheckboxComplete,
+} from './checkboxes.js';
+import { managedToCheckboxItems } from './managedCheckboxes.js';
+import { getImagePercentFromClick, wireMapZoom } from './mapZoom.js';
+import { setCheckboxStates } from '../storage/progress.js';
 
 export const MAP_MARKER = /\[\[map:([^\]]+)\]\]/g;
 
-const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 3;
-const ZOOM_STEP = 0.25;
+const DEFAULT_POINT_TYPE: MapPointType = {
+  id: 'default',
+  name: 'Default',
+  color: '#10b981',
+};
 
 function escapeHtml(value: string): string {
   return value
@@ -33,30 +43,101 @@ export function preprocessMapMarkdown(content: string): string {
   });
 }
 
+export function defaultPointTypes(): MapPointType[] {
+  return [{ ...DEFAULT_POINT_TYPE }];
+}
+
+export function resolvePointType(map: GameMap, typeId: string | null | undefined): MapPointType {
+  const types = map.pointTypes?.length ? map.pointTypes : defaultPointTypes();
+  return types.find((type) => type.id === typeId) ?? types[0] ?? DEFAULT_POINT_TYPE;
+}
+
+export function normalizeGameMap(map: GameMap): GameMap {
+  const pointTypes =
+    Array.isArray(map.pointTypes) && map.pointTypes.length > 0
+      ? map.pointTypes
+      : defaultPointTypes();
+  const defaultTypeId = pointTypes[0].id;
+
+  return {
+    id: map.id,
+    name: map.name,
+    imageUrl: map.imageUrl,
+    imageFilename: map.imageFilename,
+    viewport: map.viewport ?? { width: 800, height: 600 },
+    start: map.start ?? { x: 0, y: 0 },
+    pointTypes,
+    points: (Array.isArray(map.points) ? map.points : []).map((point) => ({
+      id: point.id,
+      x: point.x,
+      y: point.y,
+      label: point.label,
+      typeId:
+        point.typeId && pointTypes.some((type) => type.id === point.typeId)
+          ? point.typeId
+          : defaultTypeId,
+      checkboxId: point.checkboxId ?? null,
+    })),
+  };
+}
+
 function renderMapPoints(map: GameMap): string {
   return map.points
-    .map(
-      (point) => `
+    .map((point) => {
+      const pointType = resolvePointType(map, point.typeId);
+      const hasCheckbox = Boolean(point.checkboxId);
+
+      return `
         <button
           type="button"
-          class="game-map-point"
+          class="game-map-point${hasCheckbox ? ' has-checkbox' : ''}"
           style="left: ${point.x}%; top: ${point.y}%;"
+          data-point-id="${escapeHtml(point.id)}"
+          ${point.checkboxId ? `data-checkbox-id="${escapeHtml(point.checkboxId)}"` : ''}
           title="${escapeHtml(point.label.trim() || 'Point')}"
           aria-label="${escapeHtml(point.label.trim() || 'Map point')}"
         >
-          <span class="game-map-point-pin" aria-hidden="true"></span>
+          <span
+            class="game-map-point-pin"
+            style="background-color: ${escapeHtml(pointType.color)};"
+            aria-hidden="true"
+          ></span>
           ${
             point.label.trim()
               ? `<span class="game-map-point-label">${escapeHtml(point.label.trim())}</span>`
               : ''
           }
         </button>
-      `,
-    )
+      `;
+    })
     .join('');
 }
 
-function renderZoomControls(): string {
+function renderMapLegend(map: GameMap): string {
+  const types = map.pointTypes?.length ? map.pointTypes : defaultPointTypes();
+  if (types.length === 0) return '';
+
+  return `
+    <div class="game-map-legend">
+      ${types
+        .map(
+          (type) => `
+            <span class="game-map-legend-item">
+              <span
+                class="game-map-legend-swatch"
+                style="background-color: ${escapeHtml(type.color)};"
+                aria-hidden="true"
+              ></span>
+              <span class="game-map-legend-label">${escapeHtml(type.name.trim() || type.id)}</span>
+            </span>
+          `,
+        )
+        .join('')}
+    </div>
+  `;
+}
+
+export function renderMapZoomControls(): string {
   return `
     <div class="game-map-zoom-controls">
       <button type="button" class="game-map-zoom-btn" data-map-zoom="out" aria-label="Zoom out">−</button>
@@ -83,6 +164,7 @@ export function renderGameMapHtml(map: GameMap): string {
     >
       <div class="game-map-header">
         <span class="game-map-title">${escapeHtml(map.name.trim() || 'Untitled map')}</span>
+        ${renderMapLegend(map)}
       </div>
       <div class="game-map-body">
         <div
@@ -100,7 +182,7 @@ export function renderGameMapHtml(map: GameMap): string {
               ${renderMapPoints(map)}
             </div>
           </div>
-          ${renderZoomControls()}
+          ${renderMapZoomControls()}
         </div>
       </div>
     </div>
@@ -116,27 +198,18 @@ export function mountGameMapBlocks(container: HTMLElement, mapsData: GameMapsDat
       return;
     }
 
-    element.outerHTML = renderGameMapHtml(map);
+    element.outerHTML = renderGameMapHtml(normalizeGameMap(map));
   });
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
+export interface WireGameMapsContext {
+  gameSlug: string;
+  checkboxes: ManagedCheckbox[];
+  checkedItems: Record<string, boolean>;
+  onProgressUpdate: (checkedItems: Record<string, boolean>) => void;
 }
 
-function syncViewportCentering(viewport: HTMLElement, image: HTMLImageElement): void {
-  const displayWidth = image.offsetWidth;
-  const displayHeight = image.offsetHeight;
-  const shouldCenter =
-    displayWidth > 0 &&
-    displayHeight > 0 &&
-    displayWidth <= viewport.clientWidth &&
-    displayHeight <= viewport.clientHeight;
-
-  viewport.classList.toggle('is-centered', shouldCenter);
-}
-
-function wireSingleGameMap(root: HTMLElement): () => void {
+function wireSingleGameMap(root: HTMLElement, context?: WireGameMapsContext): () => void {
   const viewport = root.querySelector('.game-map-viewport') as HTMLElement | null;
   const image = root.querySelector('.game-map-image') as HTMLImageElement | null;
   const zoomLabel = root.querySelector('[data-map-zoom-label]') as HTMLElement | null;
@@ -145,113 +218,91 @@ function wireSingleGameMap(root: HTMLElement): () => void {
   const startX = Number(root.dataset.startX ?? 0);
   const startY = Number(root.dataset.startY ?? 0);
 
-  let zoom = 1;
-  let hasAppliedStart = false;
   const cleanups: Array<() => void> = [];
 
-  const updateZoomLabel = () => {
-    if (zoomLabel) zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+  const checkboxItems = context ? managedToCheckboxItems(context.checkboxes) : [];
+  const checkboxIndex = buildCheckboxIndex(checkboxItems);
+
+  const syncPointCompletionVisuals = (checkedItems: Record<string, boolean>) => {
+    if (!context) return;
+    syncMapPointCompletionVisuals(root, context.checkboxes, checkedItems);
   };
 
-  const clampScroll = () => {
-    const maxX = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
-    const maxY = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-    viewport.scrollLeft = clamp(viewport.scrollLeft, 0, maxX);
-    viewport.scrollTop = clamp(viewport.scrollTop, 0, maxY);
-  };
+  if (context) {
+    syncPointCompletionVisuals(context.checkedItems);
 
-  const applyImageZoom = () => {
-    if (!image.naturalWidth || !image.naturalHeight) return;
-    image.style.width = `${image.naturalWidth * zoom}px`;
-    image.style.height = `${image.naturalHeight * zoom}px`;
-    updateZoomLabel();
-    syncViewportCentering(viewport, image);
-    clampScroll();
-  };
+    root.querySelectorAll<HTMLElement>('.game-map-point[data-checkbox-id]').forEach((point) => {
+      const onClick = (event: Event) => {
+        event.preventDefault();
+        event.stopPropagation();
 
-  const applyStartScroll = () => {
-    if (hasAppliedStart) return;
-    const maxX = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
-    const maxY = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-    viewport.scrollLeft = clamp(startX * zoom, 0, maxX);
-    viewport.scrollTop = clamp(startY * zoom, 0, maxY);
-    hasAppliedStart = true;
-    clampScroll();
-  };
+        const checkboxId = point.dataset.checkboxId;
+        if (!checkboxId || !context) return;
 
-  const setZoom = (nextZoom: number, anchor?: { x: number; y: number }) => {
-    const oldZoom = zoom;
-    const clampedZoom = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM);
-    if (clampedZoom === oldZoom) return;
+        const item = checkboxIndex.get(checkboxId);
+        if (!item) return;
 
-    const anchorX = anchor?.x ?? viewport.scrollLeft + viewport.clientWidth / 2;
-    const anchorY = anchor?.y ?? viewport.scrollTop + viewport.clientHeight / 2;
-    const pointerOffsetX = anchor ? anchor.x - viewport.scrollLeft : viewport.clientWidth / 2;
-    const pointerOffsetY = anchor ? anchor.y - viewport.scrollTop : viewport.clientHeight / 2;
+        const currentlyComplete = isCheckboxComplete(checkboxId, checkboxIndex, context.checkedItems);
+        const targetChecked = !currentlyComplete;
+        const updates: Record<string, boolean> = {};
 
-    zoom = clampedZoom;
-    applyImageZoom();
+        if (item.childIds.length > 0) {
+          for (const leafId of collectDescendantLeaves(item.id, checkboxIndex)) {
+            updates[leafId] = targetChecked;
+          }
+        } else {
+          updates[item.id] = targetChecked;
+        }
 
-    const ratio = zoom / oldZoom;
-    viewport.scrollLeft = anchorX * ratio - pointerOffsetX;
-    viewport.scrollTop = anchorY * ratio - pointerOffsetY;
-    clampScroll();
-  };
+        const updated = setCheckboxStates(context.gameSlug, updates);
+        context.checkedItems = updated.checkedItems;
+        syncPointCompletionVisuals(updated.checkedItems);
+        context.onProgressUpdate(updated.checkedItems);
+      };
 
-  const onReady = () => {
-    applyImageZoom();
-    applyStartScroll();
-  };
-
-  if (image.complete) {
-    onReady();
-  } else {
-    const onLoad = () => onReady();
-    image.addEventListener('load', onLoad, { once: true });
-    cleanups.push(() => image.removeEventListener('load', onLoad));
+      point.addEventListener('click', onClick);
+      cleanups.push(() => point.removeEventListener('click', onClick));
+    });
   }
 
-  root.querySelectorAll('[data-map-zoom]').forEach((button) => {
-    const onClick = (event: Event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const action = (button as HTMLElement).dataset.mapZoom;
-      if (action === 'in') setZoom(zoom + ZOOM_STEP);
-      else if (action === 'out') setZoom(zoom - ZOOM_STEP);
-      else if (action === 'reset') {
-        zoom = 1;
-        applyImageZoom();
-        hasAppliedStart = false;
-        applyStartScroll();
-      }
-    };
-    button.addEventListener('click', onClick);
-    cleanups.push(() => button.removeEventListener('click', onClick));
-  });
-
-  const onWheel = (event: WheelEvent) => {
-    event.preventDefault();
-    const rect = viewport.getBoundingClientRect();
-    const anchor = {
-      x: viewport.scrollLeft + (event.clientX - rect.left),
-      y: viewport.scrollTop + (event.clientY - rect.top),
-    };
-    const delta = event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
-    setZoom(zoom + delta, anchor);
-  };
-  viewport.addEventListener('wheel', onWheel, { passive: false });
-  cleanups.push(() => viewport.removeEventListener('wheel', onWheel));
+  cleanups.push(
+    wireMapZoom(viewport, image, {
+      startX,
+      startY,
+      zoomLabel,
+      zoomControlsRoot: root,
+    }),
+  );
 
   return () => {
     cleanups.forEach((cleanup) => cleanup());
   };
 }
 
-export function wireGameMaps(container: HTMLElement): () => void {
+export function syncMapPointCompletionVisuals(
+  container: HTMLElement,
+  checkboxes: ManagedCheckbox[],
+  checkedItems: Record<string, boolean>,
+): void {
+  const checkboxIndex = buildCheckboxIndex(managedToCheckboxItems(checkboxes));
+
+  container.querySelectorAll<HTMLElement>('.game-map-point[data-checkbox-id]').forEach((point) => {
+    const checkboxId = point.dataset.checkboxId;
+    if (!checkboxId) return;
+
+    const completed = isCheckboxComplete(checkboxId, checkboxIndex, checkedItems);
+    point.classList.toggle('is-completed', completed);
+    point.setAttribute('aria-pressed', completed ? 'true' : 'false');
+  });
+}
+
+export function wireGameMaps(container: HTMLElement, context?: WireGameMapsContext): () => void {
   const cleanups = Array.from(container.querySelectorAll('.game-map')).map((map) =>
-    wireSingleGameMap(map as HTMLElement),
+    wireSingleGameMap(map as HTMLElement, context),
   );
   return () => {
     cleanups.forEach((cleanup) => cleanup());
   };
 }
+
+export { getImagePercentFromClick, wireMapZoom };

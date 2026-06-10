@@ -11,8 +11,9 @@ export const EDITOR_TAB_HELP: Record<EditorTabId, string> = {
     <p>Removing an image from a page does not delete it from this list.</p>
   `,
   maps: `
-    <p>Upload a base image for each map and place points on it.</p>
-    <p>Set viewport size and starting scroll position for the reader window. Embed a map with <code>[[map:map-id]]</code>. In the viewer, pan freely and use the zoom controls (or mouse wheel) to zoom.</p>
+    <p>Upload a base image for each map and place points on it. Scroll to pan and use zoom controls (or mouse wheel) while editing.</p>
+    <p>Define custom point types for the map legend. Link points to checkboxes from the Checkboxes tab to track completion from the map in the viewer.</p>
+    <p>Set viewport size and starting scroll position for the reader window. Embed a map with <code>[[map:map-id]]</code>.</p>
   `,
   checkboxes: `
     <p>Track checkboxes with stable ids and assign completion tags to them.</p>

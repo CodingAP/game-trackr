@@ -271,6 +271,7 @@ export async function renderEditor(
         markdownEditor,
         activeSlug,
         maps,
+        () => getCheckboxesData?.() ?? checkboxes,
       );
       getMapsData = mapsEditor.getData;
       cleanupMapsEditor = mapsEditor.cleanup;

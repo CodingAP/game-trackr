@@ -1859,10 +1859,28 @@
   }
 
   .game-map-point-pin {
-    @apply block h-3 w-3 rounded-full border-2;
+    @apply block h-3 w-3 rounded-full border-2 transition-transform;
     border-color: rgb(var(--surface));
     background-color: rgb(var(--accent));
     box-shadow: 0 0 0 1px rgb(var(--accent) / 0.35);
+  }
+
+  .game-map-point.has-checkbox {
+    @apply cursor-pointer;
+  }
+
+  .game-map-point.has-checkbox:hover .game-map-point-pin {
+    transform: scale(1.15);
+  }
+
+  .game-map-point.is-completed .game-map-point-pin {
+    opacity: 0.45;
+    box-shadow: none;
+  }
+
+  .game-map-point.is-completed .game-map-point-label {
+    opacity: 0.65;
+    text-decoration: line-through;
   }
 
   .game-map-point-label {
@@ -1870,6 +1888,26 @@
     background-color: rgb(var(--surface));
     color: rgb(var(--text-heading));
     box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
+  }
+
+  .game-map-legend {
+    @apply flex flex-wrap items-center gap-3;
+  }
+
+  .game-map-legend-item {
+    @apply inline-flex items-center gap-1.5 text-xs;
+    color: rgb(var(--text-muted));
+  }
+
+  .game-map-legend-swatch {
+    @apply block h-2.5 w-2.5 rounded-full border;
+    border-color: rgb(var(--surface));
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.12);
+  }
+
+  .game-map-legend-label {
+    @apply font-medium;
+    color: rgb(var(--text-heading));
   }
 
 
@@ -1900,22 +1938,41 @@
   }
 
   .map-editor-canvas-wrap {
-    @apply overflow-hidden rounded-lg border;
+    @apply overflow-hidden rounded-lg border p-4;
+    border-color: rgb(var(--border-subtle));
+    background-color: rgb(var(--surface-muted) / 0.35);
+  }
+
+  .map-editor-frame {
+    @apply relative max-w-full rounded-lg border;
     border-color: rgb(var(--border-subtle));
     background-color: rgb(var(--surface));
   }
 
-  .map-editor-canvas {
-    @apply relative inline-block max-w-full cursor-crosshair leading-none;
+  .map-editor-viewport {
+    @apply h-full w-full cursor-crosshair;
   }
 
-  .map-editor-canvas img {
-    @apply block max-h-[28rem] max-w-full select-none;
+  .map-editor-viewport.is-centered {
+    @apply flex items-center justify-center;
+    overflow: hidden;
+  }
+
+  .map-editor-viewport:not(.is-centered) {
+    overflow: auto;
+  }
+
+  .map-editor-stage {
+    @apply relative inline-block leading-none;
+  }
+
+  .map-editor-image {
+    @apply block max-w-none select-none;
   }
 
   .map-editor-point {
     @apply absolute flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-transparent p-0 transition-colors;
-    background-color: rgb(var(--accent));
+    background-color: transparent;
   }
 
   .map-editor-point.is-selected {
@@ -1924,8 +1981,26 @@
   }
 
   .map-editor-point-pin {
-    @apply block h-2 w-2 rounded-full;
-    background-color: rgb(var(--surface));
+    @apply block h-3 w-3 rounded-full border-2;
+    border-color: rgb(var(--surface));
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.12);
+  }
+
+  .map-editor-point-type-list {
+    @apply m-0 list-none space-y-2 p-0;
+  }
+
+  .map-editor-point-type-item {
+    @apply flex flex-wrap items-center gap-2 rounded-lg border p-2;
+    border-color: rgb(var(--border-subtle));
+  }
+
+  .map-editor-point-type-name {
+    @apply min-w-[10rem] flex-1;
+  }
+
+  .map-editor-point-type-color {
+    @apply h-9 w-12 cursor-pointer rounded border-0 bg-transparent p-0;
   }
 
   .map-editor-point-list {
@@ -1933,7 +2008,7 @@
   }
 
   .map-editor-point-item {
-    @apply flex flex-wrap items-center gap-2 rounded-lg border p-2;
+    @apply flex flex-wrap items-end gap-2 rounded-lg border p-2;
     border-color: rgb(var(--border-subtle));
   }
 
@@ -1944,5 +2019,9 @@
 
   .map-editor-point-label {
     @apply min-w-[10rem] flex-1;
+  }
+
+  .map-editor-point-field {
+    @apply block min-w-[8rem];
   }
 }

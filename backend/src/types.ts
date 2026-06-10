@@ -66,11 +66,19 @@ export interface MapScrollPosition {
   y: number;
 }
 
+export interface MapPointType {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface MapPoint {
   id: string;
   x: number;
   y: number;
   label: string;
+  typeId?: string | null;
+  checkboxId?: string | null;
 }
 
 export interface GameMap {
@@ -80,6 +88,7 @@ export interface GameMap {
   imageFilename: string;
   viewport: MapViewport;
   start: MapScrollPosition;
+  pointTypes: MapPointType[];
   points: MapPoint[];
 }
 
