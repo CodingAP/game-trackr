@@ -1,19 +1,13 @@
-import { buildTagProgressMarker } from '../markdown/completionProgress.js';
-import { renderListSearchBar, wireListSearch } from './listSearch.js';
+import { slugifyProgressBarId } from '../markdown/completionProgress.js';
 import { icon, iconLabel } from './icons.js';
 import type { CompletionTag } from '../types/index.js';
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
-}
-
 export function openProgressInsertDialog(options: {
   tags: CompletionTag[];
-  onInsert: (marker: string) => void;
+  getTags?: () => CompletionTag[];
+  onCommitTag?: (tag: CompletionTag | null) => void;
+  onRegisterTag?: (tag: CompletionTag) => void;
+  onUpdateTag?: (id: string, updates: { name: string }) => void;
 }): void {
   const overlay = document.createElement('div');
   overlay.className = 'auth-overlay progress-insert-overlay';
@@ -23,53 +17,24 @@ export function openProgressInsertDialog(options: {
         <h2 id="progress-insert-title" class="auth-dialog-title">Insert progress bar</h2>
         <button type="button" class="image-insert-close" data-action="close" aria-label="Close">${icon('close', 'ui-icon ui-icon-md')}</button>
       </div>
-      <p class="text-muted text-sm mb-4">Inserts a completion tag progress bar at the cursor.</p>
-      ${
-        options.tags.length > 0
-          ? `
-            <div class="progress-tag-list mb-4">
-              <p class="label mb-2">Completion tags</p>
-              ${renderListSearchBar({ id: 'progress-insert-search', placeholder: 'Search tags...', className: 'mb-2' })}
-              <div class="progress-tag-options">
-                ${options.tags
-                  .map((tag) => {
-                    const name = tag.name.trim() || 'Untitled tag';
-                    return `
-                      <button
-                        type="button"
-                        class="btn-secondary text-sm"
-                        data-action="pick-tag"
-                        data-tag-id="${tag.id}"
-                        data-search-text="${escapeHtml(`${name} ${tag.id}`)}"
-                      >
-                        ${iconLabel('tag', name, 'ui-icon ui-icon-sm')}
-                      </button>
-                    `;
-                  })
-                  .join('')}
-              </div>
-            </div>
-          `
-          : ''
-      }
+      <p class="text-muted text-sm mb-4">The progress bar updates when you leave the name field.</p>
       <div id="progress-insert-form" class="space-y-3">
         <label class="block">
-          <span class="label">Tag name</span>
-          <input type="text" id="progress-tag-name" class="input" placeholder="e.g. Complete World 1" required />
+          <span class="label">Progress bar name</span>
+          <input type="text" id="progress-tag-name" class="input" placeholder="e.g. Complete World 1" />
         </label>
         <div class="flex flex-wrap gap-2">
-          <button type="button" class="btn-primary" data-action="insert-new">${iconLabel('progress', 'Insert')}</button>
-          <button type="button" class="btn-secondary" data-action="close">${iconLabel('close', 'Cancel')}</button>
+          <button type="button" class="btn-secondary" data-action="close">${iconLabel('close', 'Done')}</button>
         </div>
       </div>
     </div>
   `;
 
   const nameInput = overlay.querySelector('#progress-tag-name') as HTMLInputElement;
-  const listSearch = wireListSearch(overlay);
+  let linkedTagId: string | null = null;
 
   const close = () => {
-    listSearch.cleanup();
+    commitName();
     document.removeEventListener('keydown', onKeyDown);
     overlay.remove();
   };
@@ -78,9 +43,45 @@ export function openProgressInsertDialog(options: {
     if (event.key === 'Escape') close();
   };
 
-  const insertForTag = (tag: CompletionTag) => {
-    options.onInsert(buildTagProgressMarker(tag));
-    close();
+  const commitName = () => {
+    const trimmed = nameInput.value.trim();
+    if (!trimmed) {
+      options.onCommitTag?.(null);
+      return;
+    }
+
+    const tags = options.getTags?.() ?? options.tags;
+    const existingIds = new Set(tags.map((tag) => tag.id));
+    const existing = tags.find(
+      (tag) => tag.name.trim().toLowerCase() === trimmed.toLowerCase(),
+    );
+
+    let tag: CompletionTag;
+    if (existing) {
+      linkedTagId = existing.id;
+      tag = existing;
+      if (existing.name.trim() !== trimmed) {
+        options.onUpdateTag?.(existing.id, { name: trimmed });
+        tag = { ...existing, name: trimmed };
+      }
+    } else if (linkedTagId) {
+      options.onUpdateTag?.(linkedTagId, { name: trimmed });
+      tag = {
+        id: linkedTagId,
+        name: trimmed,
+        showInSummary: false,
+      };
+    } else {
+      tag = {
+        id: slugifyProgressBarId(trimmed, existingIds),
+        name: trimmed,
+        showInSummary: false,
+      };
+      linkedTagId = tag.id;
+      options.onRegisterTag?.(tag);
+    }
+
+    options.onCommitTag?.(tag);
   };
 
   overlay.querySelectorAll('[data-action="close"]').forEach((button) => {
@@ -91,20 +92,7 @@ export function openProgressInsertDialog(options: {
     if (event.target === overlay) close();
   });
 
-  overlay.querySelectorAll('[data-action="pick-tag"]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const tagId = (button as HTMLElement).dataset.tagId;
-      const tag = options.tags.find((entry) => entry.id === tagId);
-      if (tag) insertForTag(tag);
-    });
-  });
-
-  overlay.querySelector('[data-action="insert-new"]')?.addEventListener('click', () => {
-    const name = nameInput.value.trim();
-    if (!name) return;
-    options.onInsert(buildTagProgressMarker({ id: '', name }));
-    close();
-  });
+  nameInput.addEventListener('blur', commitName);
 
   document.addEventListener('keydown', onKeyDown);
   document.body.appendChild(overlay);

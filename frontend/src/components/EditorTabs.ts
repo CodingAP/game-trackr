@@ -11,6 +11,7 @@ export function mountEditorTabs(
   navHost: HTMLElement,
   tabs: EditorTab[],
   initial: EditorTabId = 'content',
+  onTabChange?: (id: EditorTabId) => void,
 ): { setTab: (id: EditorTabId) => void; cleanup: () => void } {
   navHost.innerHTML = `
     <div class="editor-tabs" role="tablist">
@@ -46,6 +47,8 @@ export function mountEditorTabs(
       button.classList.toggle('is-active', active);
       button.setAttribute('aria-selected', String(active));
     });
+
+    onTabChange?.(id);
   };
 
   navHost.querySelectorAll('[data-tab]').forEach((button) => {

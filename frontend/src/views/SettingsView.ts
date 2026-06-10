@@ -47,9 +47,9 @@ export function renderSettings(container: HTMLElement): () => void {
 
   const viewportContent = `
     <p class="text-muted text-sm">
-      By default, images display at full size within the content area and scroll when needed.
-      Enable a custom viewport to constrain size; optionally scale images to fit.
-      Per-image overrides:
+      By default, images and videos display at full size within the content area and scroll when needed.
+      Enable a custom viewport to constrain size; optionally scale media to fit.
+      Per-embed overrides:
       <code class="text-accent">![alt](url "640x480")</code>,
       <code class="text-accent">![alt](url "640x480 fit")</code>, or add a source via
       <code class="text-accent">![alt](url "[Source label](https://example.com)")</code>.
@@ -71,10 +71,10 @@ export function renderSettings(container: HTMLElement): () => void {
       </div>
       <label class="settings-check ${viewportSettings.enabled ? '' : 'is-disabled'}">
         <input type="checkbox" id="viewport-scale" ${viewportSettings.scaleToFit ? 'checked' : ''} ${viewportSettings.enabled ? '' : 'disabled'} />
-        <span>Scale images to fit viewport</span>
+        <span>Scale media to fit viewport</span>
       </label>
       <div class="flex items-center gap-3">
-        <button type="submit" class="btn-primary">${iconLabel('save', 'Save image settings')}</button>
+        <button type="submit" class="btn-primary">${iconLabel('save', 'Save media settings')}</button>
         <span id="image-settings-status" class="text-muted text-sm"></span>
       </div>
     </form>
@@ -84,7 +84,7 @@ export function renderSettings(container: HTMLElement): () => void {
   const backupContent = `
     <p class="text-muted text-sm">
       Download your browser-stored GameTrackr data or restore it on another device.
-      Backups include checkbox progress, playtime, notes, theme, and image viewport settings.
+      Backups include checkbox progress, playtime, notes, theme, and media viewport settings.
     </p>
     ${
       exportedKeys.length > 0
@@ -114,7 +114,7 @@ export function renderSettings(container: HTMLElement): () => void {
       </div>
 
       ${renderCollapsiblePanel({ title: 'Theme', className: 'mb-6', content: themeContent })}
-      ${renderCollapsiblePanel({ title: 'Image viewport', className: 'mb-6', content: viewportContent })}
+      ${renderCollapsiblePanel({ title: 'Media viewport', className: 'mb-6', content: viewportContent })}
       ${renderCollapsiblePanel({ title: 'Import / export', content: backupContent })}
     </div>
   `;
@@ -163,7 +163,7 @@ export function renderSettings(container: HTMLElement): () => void {
       height: Number(heightInput.value),
       scaleToFit: scaleInput.checked,
     });
-    imageStatus.textContent = 'Image settings saved.';
+    imageStatus.textContent = 'Media settings saved.';
     window.setTimeout(() => {
       imageStatus.textContent = '';
     }, 3000);

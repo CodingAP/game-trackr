@@ -19,7 +19,7 @@ import type { MarkdownEditorHandle } from '../types/markdownEditor.js';
 import { requireAuth } from './AuthPrompt.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from './CollapsiblePanel.js';
 import { renderListSearchBar, wireListSearch } from './listSearch.js';
-import { iconLabel } from './icons.js';
+import { icon, iconLabel } from './icons.js';
 
 const POINT_TYPE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -335,14 +335,17 @@ function renderMapEditorBody(
       }
     </div>
 
-    <div class="flex flex-wrap gap-2">
-      <button type="button" class="btn-secondary text-xs" data-action="insert-map-marker" data-map-id="${map.id}">
-        ${iconLabel('plus', 'Insert in content', 'ui-icon ui-icon-sm')}
-      </button>
-      <button type="button" class="btn-danger text-xs" data-action="remove-map" data-map-id="${map.id}">
-        ${iconLabel('trash', 'Remove map', 'ui-icon ui-icon-sm')}
-      </button>
-    </div>
+  `;
+}
+
+function renderMapPanelTitleActions(mapId: string): string {
+  return `
+    <button type="button" class="btn-secondary" data-action="insert-map-marker" data-map-id="${mapId}" aria-label="Insert in content">
+      ${icon('plus', 'ui-icon ui-icon-sm')}
+    </button>
+    <button type="button" class="btn-danger" data-action="remove-map" data-map-id="${mapId}" aria-label="Remove map">
+      ${icon('trash', 'ui-icon ui-icon-sm')}
+    </button>
   `;
 }
 
@@ -483,6 +486,7 @@ export function mountMapsEditor(
                   const selectedPointId = selectedPoints.get(map.id) ?? null;
                   return renderCollapsiblePanel({
                     title,
+                    titleActions: renderMapPanelTitleActions(map.id),
                     className: 'map-editor-card',
                     defaultOpen: expandedMaps.has(map.id),
                     attributes: {

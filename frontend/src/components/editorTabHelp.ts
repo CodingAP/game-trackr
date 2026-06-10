@@ -3,31 +3,36 @@ import { icon } from './icons.js';
 
 export const EDITOR_TAB_HELP: Record<EditorTabId, string> = {
   content: `
-    <p>Use the sidebar to switch journal pages. Click a page to edit it; double-click a name to rename.</p>
-    <p>Use the toolbar to insert checkboxes, progress bars, and images into page content.</p>
+    <p><strong>Pages</strong> — Use the sidebar to switch journal pages. Click to edit; double-click a name to rename.</p>
+    <p><strong>Writing</strong> — Use the toolbar for headings, formatting, checkboxes, progress bars, and media. Changes autosave.</p>
+    <p><strong>Viewer</strong> — Open the viewer to read the journal with live checkbox and progress tracking.</p>
   `,
   images: `
-    <p>Upload images here or use the Image button in the editor toolbar to insert them into page content.</p>
-    <p>Removing an image from a page does not delete it from this list.</p>
+    <p><strong>Library</strong> — Upload images and videos here, or import from a URL. Each file appears once with shared alt text and source attribution.</p>
+    <p><strong>Embedding</strong> — Use the Media toolbar button to place an embed in page content. Viewport size and centering are set per embed when editing the page.</p>
+    <p><strong>Deleting</strong> — Removing a file from uploads deletes it from the server and strips any journal embeds that reference it.</p>
   `,
   maps: `
-    <p>Upload a base image for each map and place points on it. Scroll to pan and use zoom controls (or mouse wheel) while editing.</p>
-    <p>Define custom point types for the map legend. Link points to checkboxes from the Checkboxes tab to track completion from the map in the viewer.</p>
-    <p>Set viewport size and starting scroll position for the reader window. Embed a map with <code>[[map:map-id]]</code>.</p>
+    <p><strong>Maps</strong> — Upload a base image for each map, then place points on it. Pan with scroll and zoom with the controls or mouse wheel.</p>
+    <p><strong>Points</strong> — Define custom point types for the legend. Link points to checkboxes in the Checkboxes tab to reflect completion in the viewer.</p>
+    <p><strong>Reader view</strong> — Set viewport size and starting scroll position for the map window in the journal. Embed with <code>[[map:map-id]]</code>.</p>
   `,
   checkboxes: `
-    <p>Track checkboxes with stable ids and assign completion tags to them.</p>
-    <p>Insert a checkbox in page content with <code>- [[cb:id]] Label</code>.</p>
+    <p><strong>Checkboxes</strong> — Define trackable items with stable lowercase ids. Nesting is supported for grouped goals.</p>
+    <p><strong>Progress bars</strong> — Assign progress bars to each checkbox so completion counts toward the right totals.</p>
+    <p><strong>Embedding</strong> — Insert in page content with <code>- [[cb:id]] Label</code>, or use the toolbar checkbox button.</p>
   `,
   tags: `
-    <p>Create completion tags for progress bars. Assign checkboxes to tags in the Checkboxes tab.</p>
-    <p>Embed a tag progress bar with <code>[[pb:Tag Name]]</code>. Toggle &quot;Show in summary&quot; to display a tag above the journal in the viewer.</p>
+    <p><strong>Progress bars</strong> — Define named bars here. Each bar tracks completion for the checkboxes assigned to it in the Checkboxes tab.</p>
+    <p><strong>Embedding</strong> — Place a bar in page content with <code>[[pb:progress-bar-id]]</code> or the toolbar progress button. Embeds reference the stable id, so renaming the label does not disconnect them.</p>
+    <p><strong>Viewer summary</strong> — Enable &quot;Show in summary&quot; to display a bar above the journal in the viewer.</p>
   `,
   admin: `
-    <p><strong>MobyGames</strong> — Link this journal to a MobyGames entry to show box art, release info, and description in the viewer.</p>
-    <p><strong>Export</strong> — Download pages, checkboxes, completion tags, maps, and uploaded images as a <code>.gametrackr.json</code> file.</p>
-    <p><strong>Duplicate</strong> — Create a copy of this game journal with a new slug.</p>
-    <p><strong>Delete</strong> — Permanently delete this game, its pages, images, and completion tags.</p>
+    <p><strong>MobyGames</strong> — Link this journal to a MobyGames entry for box art, release info, and description in the viewer.</p>
+    <p><strong>Maintenance</strong> — Clear abandoned badges removes embed markers that reference deleted checkboxes, progress bars, or maps.</p>
+    <p><strong>Export</strong> — Download pages, checkboxes, progress bars, maps, and uploaded media as a <code>.gametrackr.json</code> file.</p>
+    <p><strong>Duplicate</strong> — Create a copy of this game with a new name and slug.</p>
+    <p><strong>Delete</strong> — Permanently remove this game, including its pages, media, and progress bars.</p>
   `,
 };
 

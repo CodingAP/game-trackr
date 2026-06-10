@@ -77,6 +77,7 @@ export function wireImportGameButton(container: HTMLElement): () => void {
         checkboxes: parsed.bundle.checkboxes,
         completionTags: parsed.bundle.completionTags,
         maps: parsed.bundle.maps,
+        imageLibrary: parsed.bundle.imageLibrary,
         images: parsed.bundle.images,
       });
       navigate(`/viewer/${game.slug}`);

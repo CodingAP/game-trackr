@@ -14,6 +14,7 @@ import {
   readCompletionTags,
   readContent,
   readGameIndex,
+  readImageLibrary,
   readJournal,
   readMaps,
   readMobyGamesInfo,
@@ -21,11 +22,13 @@ import {
   writeCheckboxes,
   writeCompletionTags,
   writeContent,
+  writeEditorState,
+  writeImageLibrary,
   writeJournal,
   writeMaps,
   writeMobyGamesLink,
 } from '../storage/games.js';
-import { filterImageFilenames } from '../storage/imageFiles.js';
+import { filterImageFilenames, sanitizeImportFilename } from '../storage/imageFiles.js';
 import { requireAuth } from '../middleware/auth.js';
 import { createUploadMiddleware, imagePublicPath } from '../middleware/upload.js';
 import { downloadRemoteImage } from '../services/fetchRemoteImage.js';
@@ -35,8 +38,10 @@ import type {
   CompletionTagsData,
   CreateGameBody,
   DuplicateGameBody,
+  EditorStateBody,
   FullJournalData,
   GameMapsData,
+  ImageLibraryData,
   ImportGameBody,
   MobyGamesLinkBody,
 } from '../types.js';
@@ -44,11 +49,14 @@ import type {
 const router = Router();
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-function readSlug(req: { params: { slug?: string | string[] } }): string {
-  const slug = req.params.slug;
-  if (typeof slug === 'string') return slug;
-  if (Array.isArray(slug)) return slug[0] ?? '';
+function readRouteParam(value: string | string[] | undefined): string {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value[0] ?? '';
   return '';
+}
+
+function readSlug(req: { params: { slug?: string | string[] } }): string {
+  return readRouteParam(req.params.slug);
 }
 
 router.get('/', async (_req, res) => {
@@ -110,6 +118,7 @@ router.post('/import', requireAuth, async (req, res) => {
       checkboxes: body.checkboxes,
       completionTags: body.completionTags,
       maps: body.maps,
+      imageLibrary: body.imageLibrary,
       images: body.images,
     });
     res.status(201).json(game);
@@ -162,6 +171,36 @@ router.put('/:slug/maps', requireAuth, async (req, res) => {
   }
 
   await writeMaps(slug, body);
+  res.json(body);
+});
+
+router.get('/:slug/image-library', async (req, res) => {
+  const slug = readSlug(req);
+  const game = await getGame(slug);
+  if (!game) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  const library = await readImageLibrary(slug);
+  res.json(library);
+});
+
+router.put('/:slug/image-library', requireAuth, async (req, res) => {
+  const slug = readSlug(req);
+  const game = await getGame(slug);
+  if (!game) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  const body = req.body as ImageLibraryData;
+  if (!body || !Array.isArray(body.images)) {
+    res.status(400).json({ error: 'images array is required' });
+    return;
+  }
+
+  await writeImageLibrary(slug, body);
   res.json(body);
 });
 
@@ -283,6 +322,55 @@ router.get('/:slug', async (req, res) => {
     return;
   }
   res.json(game);
+});
+
+router.put('/:slug/editor-state', requireAuth, async (req, res) => {
+  const slug = readSlug(req);
+  const game = await getGame(slug);
+  if (!game) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  const body = req.body as EditorStateBody;
+  if (!body?.journal || !Array.isArray(body.journal.pages) || !body.journal.contents) {
+    res.status(400).json({ error: 'journal.pages and journal.contents are required' });
+    return;
+  }
+  if (!body.checkboxes || !Array.isArray(body.checkboxes.checkboxes)) {
+    res.status(400).json({ error: 'checkboxes.checkboxes array is required' });
+    return;
+  }
+  if (!body.completionTags || !Array.isArray(body.completionTags.tags)) {
+    res.status(400).json({ error: 'completionTags.tags array is required' });
+    return;
+  }
+  if (!body.maps || !Array.isArray(body.maps.maps)) {
+    res.status(400).json({ error: 'maps.maps array is required' });
+    return;
+  }
+  if (!body.imageLibrary || !Array.isArray(body.imageLibrary.images)) {
+    res.status(400).json({ error: 'imageLibrary.images array is required' });
+    return;
+  }
+
+  try {
+    const updated = await writeEditorState(slug, {
+      journal: {
+        version: body.journal.version ?? 2,
+        pages: body.journal.pages,
+        contents: body.journal.contents,
+      },
+      checkboxes: body.checkboxes,
+      completionTags: body.completionTags,
+      maps: body.maps,
+      imageLibrary: body.imageLibrary,
+    });
+    res.json(updated);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to save editor state';
+    res.status(400).json({ error: message });
+  }
 });
 
 router.put('/:slug/journal', requireAuth, async (req, res) => {
@@ -470,6 +558,33 @@ router.post('/:slug/images/from-url', requireAuth, async (req, res) => {
   }
 });
 
+router.delete('/:slug/images/:filename', requireAuth, async (req, res) => {
+  const slug = readSlug(req);
+  const game = await getGame(slug);
+  if (!game) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  const filename = sanitizeImportFilename(readRouteParam(req.params.filename));
+  if (!filename) {
+    res.status(400).json({ error: 'Invalid filename' });
+    return;
+  }
+
+  try {
+    await fs.unlink(path.join(imagesDir(slug), filename));
+    res.status(204).send();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      res.status(404).json({ error: 'Media file not found' });
+      return;
+    }
+    const message = error instanceof Error ? error.message : 'Failed to delete media';
+    res.status(500).json({ error: message });
+  }
+});
+
 router.post('/:slug/images', requireAuth, async (req, res, next) => {
   const slug = readSlug(req);
   const game = await getGame(slug);
@@ -485,7 +600,7 @@ router.post('/:slug/images', requireAuth, async (req, res, next) => {
       return;
     }
     if (!req.file) {
-      res.status(400).json({ error: 'No image uploaded' });
+      res.status(400).json({ error: 'No media uploaded' });
       return;
     }
 

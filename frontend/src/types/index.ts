@@ -77,6 +77,14 @@ export interface GameMapsData {
   maps: GameMap[];
 }
 
+export interface EditorStateBody {
+  journal: FullJournalData;
+  checkboxes: CheckboxConnectionsData;
+  completionTags: CompletionTagsData;
+  maps: GameMapsData;
+  imageLibrary: ImageLibraryData;
+}
+
 export type ThemeId = 'dark' | 'light' | 'midnight' | 'forest';
 
 export interface ThemeOption {
@@ -148,6 +156,20 @@ export interface GameNotes {
 export interface UploadedImage {
   filename: string;
   url: string;
+}
+
+export interface ImageLibraryEntry {
+  url: string;
+  filename: string;
+  alt: string;
+  source?: {
+    label: string;
+    url: string;
+  };
+}
+
+export interface ImageLibraryData {
+  images: ImageLibraryEntry[];
 }
 
 export interface ImageViewportSettings {
@@ -231,6 +253,7 @@ export interface JournalExportBundle {
   checkboxes: CheckboxConnectionsData;
   completionTags: CompletionTagsData;
   maps?: GameMapsData;
+  imageLibrary?: ImageLibraryData;
   images: JournalExportImage[];
 }
 
@@ -242,6 +265,7 @@ export interface ImportGameRequest {
   checkboxes: CheckboxConnectionsData;
   completionTags: CompletionTagsData;
   maps?: GameMapsData;
+  imageLibrary?: ImageLibraryData;
   images: JournalExportImage[];
 }
 

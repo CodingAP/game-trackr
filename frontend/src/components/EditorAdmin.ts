@@ -12,9 +12,16 @@ import type {
   CompletionTagsData,
   FullJournalData,
   GameMapsData,
+  ImageLibraryData,
 } from '../types/index.js';
 import { navigate } from '../router.js';
 import { iconLabel } from './icons.js';
+
+interface EditorAdminOptions {
+  countAbandonedEmbeds?: () => number;
+  clearAbandonedEmbeds?: () => number;
+  createMode?: boolean;
+}
 
 export function mountEditorAdmin(
   host: HTMLElement,
@@ -24,9 +31,23 @@ export function mountEditorAdmin(
   getCheckboxes: () => CheckboxConnectionsData,
   getCompletionTags: () => CompletionTagsData,
   getMaps: () => GameMapsData,
+  getImageLibrary: () => ImageLibraryData,
+  options: EditorAdminOptions = {},
 ): () => void {
   host.innerHTML = `
     <div class="space-y-4">
+      ${renderCollapsiblePanel({
+        title: 'Maintenance',
+        content: `
+          <p class="text-muted text-sm mb-3">Remove markdown badges that reference deleted checkboxes, progress bars, or maps.</p>
+          <button type="button" class="btn-secondary" data-action="clear-abandoned-embeds">${iconLabel('trash', 'Clear abandoned badges')}</button>
+          <p id="admin-clear-embeds-status" class="text-muted text-sm"></p>
+        `,
+      })}
+      ${
+        options.createMode
+          ? ''
+          : `
       ${renderCollapsiblePanel({
         title: 'Export',
         content: `
@@ -59,12 +80,39 @@ export function mountEditorAdmin(
           <p id="admin-delete-status" class="text-muted text-sm"></p>
         `,
       })}
+      `
+      }
     </div>
   `;
 
+  const clearEmbedsStatus = host.querySelector('#admin-clear-embeds-status') as HTMLElement;
   const exportStatus = host.querySelector('#admin-export-status') as HTMLElement;
   const duplicateStatus = host.querySelector('#admin-duplicate-status') as HTMLElement;
   const deleteStatus = host.querySelector('#admin-delete-status') as HTMLElement;
+
+  const onClearAbandonedEmbeds = () => {
+    if (!options.clearAbandonedEmbeds) {
+      clearEmbedsStatus.textContent = 'Cleanup is unavailable.';
+      return;
+    }
+
+    const count = options.countAbandonedEmbeds?.() ?? 0;
+    if (count === 0) {
+      clearEmbedsStatus.textContent = 'No abandoned badges found.';
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Remove ${count} abandoned badge${count === 1 ? '' : 's'} from all pages? This cannot be undone until you save.`,
+    );
+    if (!confirmed) return;
+
+    const removed = options.clearAbandonedEmbeds();
+    clearEmbedsStatus.textContent =
+      removed > 0
+        ? `Removed ${removed} abandoned badge${removed === 1 ? '' : 's'}. Save the game to keep changes.`
+        : 'No abandoned badges found.';
+  };
 
   const onExport = async () => {
     exportStatus.textContent = 'Exporting...';
@@ -78,6 +126,7 @@ export function mountEditorAdmin(
         getCheckboxes(),
         getCompletionTags(),
         getMaps(),
+        getImageLibrary(),
         images,
       );
       downloadJournalBundle(bundle);
@@ -123,6 +172,7 @@ export function mountEditorAdmin(
     }
   };
 
+  host.querySelector('[data-action="clear-abandoned-embeds"]')?.addEventListener('click', onClearAbandonedEmbeds);
   host.querySelector('[data-action="export-journal"]')?.addEventListener('click', onExport);
   host.querySelector('[data-action="duplicate"]')?.addEventListener('click', onDuplicate);
   host.querySelector('[data-action="delete"]')?.addEventListener('click', onDelete);
@@ -131,6 +181,10 @@ export function mountEditorAdmin(
 
   return () => {
     cleanupCollapsible();
+    host.querySelector('[data-action="clear-abandoned-embeds"]')?.removeEventListener(
+      'click',
+      onClearAbandonedEmbeds,
+    );
     host.querySelector('[data-action="export-journal"]')?.removeEventListener('click', onExport);
     host.querySelector('[data-action="duplicate"]')?.removeEventListener('click', onDuplicate);
     host.querySelector('[data-action="delete"]')?.removeEventListener('click', onDelete);

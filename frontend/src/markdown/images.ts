@@ -1,7 +1,9 @@
 import type { ImageViewportSettings } from '../types/index.js';
 import { formatViewportTitle } from '../storage/settings.js';
+import { isVideoUrl } from './media.js';
 
-const VIEWPORT_TITLE = /^(\d+)\s*[x×]\s*(\d+)(?:\s+(fit|scale))?$/i;
+const VIEWPORT_TITLE = /^(\d+)\s*[x×]\s*(\d+)(?:\s+(fit|scale))?(?:\s+center)?$/i;
+const CENTER_ONLY_TITLE = /^center$/i;
 const MARKDOWN_LINK = /^\[([^\]]+)\]\(([^)]+)\)$/;
 
 export interface ParsedViewport {
@@ -15,6 +17,12 @@ export interface ImageSourceLink {
   url: string;
 }
 
+export function parseCenteredTitle(title: string | null | undefined): boolean {
+  if (!title) return false;
+  const trimmed = title.trim();
+  return CENTER_ONLY_TITLE.test(trimmed) || /\bcenter\b/i.test(trimmed);
+}
+
 export function parseViewportTitle(title: string | null | undefined): ParsedViewport | null {
   if (!title) return null;
   const match = title.trim().match(VIEWPORT_TITLE);
@@ -24,6 +32,22 @@ export function parseViewportTitle(title: string | null | undefined): ParsedView
     height: Number(match[2]),
     scaleToFit: Boolean(match[3]),
   };
+}
+
+export function formatImageEmbedTitle(options: {
+  viewport?: ParsedViewport;
+  centered?: boolean;
+}): string | undefined {
+  if (options.viewport) {
+    const base = formatViewportTitle(
+      options.viewport.width,
+      options.viewport.height,
+      options.viewport.scaleToFit,
+    );
+    return options.centered ? `${base} center` : base;
+  }
+  if (options.centered) return 'center';
+  return undefined;
 }
 
 export function parseMarkdownLink(value: string | null | undefined): ImageSourceLink | null {
@@ -41,30 +65,92 @@ export interface ImageSnippetOptions {
   url: string;
   viewport?: ParsedViewport;
   source?: ImageSourceLink;
+  centered?: boolean;
 }
 
-export function buildImageSnippet(options: ImageSnippetOptions): string {
-  const alt = escapeAttr(options.alt);
-  const titleAttr = options.viewport
-    ? ` title="${escapeAttr(formatViewportTitle(options.viewport.width, options.viewport.height, options.viewport.scaleToFit))}"`
-    : '';
+function buildVideoSnippet(options: ImageSnippetOptions): string {
+  const embedTitle = formatImageEmbedTitle(options);
+  const titleAttr = embedTitle ? ` title="${escapeAttr(embedTitle)}"` : '';
+  const figureClass = options.centered ? 'media-figure media-figure-centered' : 'media-figure';
+  const videoTag = `<video src="${options.url}" controls playsinline${titleAttr}></video>`;
 
   if (options.source) {
     const sourceLink = `<a href="${escapeAttr(options.source.url)}">${escapeHtml(options.source.label)}</a>`;
-    return `\n<figure class="image-figure">\n  <img src="${options.url}" alt="${alt}"${titleAttr} />\n  <figcaption class="image-source">${sourceLink}</figcaption>\n</figure>\n`;
+    return `\n<figure class="${figureClass}">\n  ${videoTag}\n  <figcaption class="media-source">${sourceLink}</figcaption>\n</figure>\n`;
   }
 
-  if (options.viewport) {
-    return `\n![${alt}](${options.url} "${formatViewportTitle(options.viewport.width, options.viewport.height, options.viewport.scaleToFit)}")\n`;
+  return `\n<figure class="${figureClass}">\n  ${videoTag}\n</figure>\n`;
+}
+
+export function buildImageSnippet(options: ImageSnippetOptions): string {
+  if (isVideoUrl(options.url)) {
+    return buildVideoSnippet(options);
+  }
+
+  const alt = escapeAttr(options.alt);
+  const embedTitle = formatImageEmbedTitle(options);
+  const titleAttr = embedTitle ? ` title="${escapeAttr(embedTitle)}"` : '';
+  const figureClass = options.centered ? 'image-figure image-figure-centered' : 'image-figure';
+
+  if (options.source) {
+    const sourceLink = `<a href="${escapeAttr(options.source.url)}">${escapeHtml(options.source.label)}</a>`;
+    return `\n<figure class="${figureClass}">\n  <img src="${options.url}" alt="${alt}"${titleAttr} />\n  <figcaption class="image-source">${sourceLink}</figcaption>\n</figure>\n`;
+  }
+
+  if (options.viewport || options.centered) {
+    const title = embedTitle ?? '';
+    return `\n![${alt}](${options.url}${title ? ` "${title}"` : ''})\n`;
   }
 
   return `\n![${alt}](${options.url})\n`;
 }
 
+export function openImageInNewTab(url: string): void {
+  const trimmed = url.trim();
+  if (!trimmed) return;
+  window.open(trimmed, '_blank', 'noopener,noreferrer');
+}
+
+export function wireClickableJournalImages(container: HTMLElement): () => void {
+  const cleanups: Array<() => void> = [];
+
+  const wireElement = (element: HTMLImageElement | HTMLVideoElement, defaultTitle: string) => {
+    if (element.closest('.game-map')) return;
+
+    element.classList.add('journal-image-clickable');
+    if (!element.title) {
+      element.title = defaultTitle;
+    }
+
+    const onClick = (event: Event) => {
+      event.preventDefault();
+      openImageInNewTab(element.currentSrc || element.src);
+    };
+
+    element.addEventListener('click', onClick);
+    cleanups.push(() => {
+      element.removeEventListener('click', onClick);
+      element.classList.remove('journal-image-clickable');
+    });
+  };
+
+  container.querySelectorAll('img').forEach((img) => {
+    wireElement(img as HTMLImageElement, 'Open image in new tab');
+  });
+
+  container.querySelectorAll('figure.media-figure video').forEach((video) => {
+    wireElement(video as HTMLVideoElement, 'Open video in new tab');
+  });
+
+  return () => {
+    cleanups.forEach((cleanup) => cleanup());
+  };
+}
+
 export function applyImageSources(container: HTMLElement): void {
   container.querySelectorAll('img').forEach((img) => {
     const title = img.getAttribute('title');
-    if (!title || parseViewportTitle(title)) return;
+    if (!title || parseViewportTitle(title) || parseCenteredTitle(title)) return;
 
     img.removeAttribute('title');
 
@@ -98,7 +184,9 @@ export function applyImageViewports(
   globalSettings: ImageViewportSettings,
 ): void {
   container.querySelectorAll('img').forEach((img) => {
-    const override = parseViewportTitle(img.getAttribute('title'));
+    const title = img.getAttribute('title');
+    const override = parseViewportTitle(title);
+    const centered = parseCenteredTitle(title);
 
     let viewport = img.closest('.image-viewport') as HTMLElement | null;
     if (!viewport) {
@@ -113,7 +201,6 @@ export function applyImageViewports(
     if (override) {
       applyCustomViewport(viewport, img, override.width, override.height, override.scaleToFit);
       viewport.dataset.customViewport = 'true';
-      img.removeAttribute('title');
     } else if (globalSettings.enabled) {
       applyCustomViewport(
         viewport,
@@ -124,6 +211,78 @@ export function applyImageViewports(
       );
     } else {
       applyNaturalViewport(viewport, img);
+    }
+
+    if (centered) {
+      applyCenteredImage(viewport, img);
+    }
+
+    if (override || centered) {
+      img.removeAttribute('title');
+    }
+  });
+
+  container.querySelectorAll('figure.image-figure-centered').forEach((figure) => {
+    const img = figure.querySelector('img');
+    if (!img) return;
+    const viewport = img.closest('.image-viewport') as HTMLElement | null;
+    applyCenteredImage(viewport, img);
+  });
+
+  applyMediaViewports(container, globalSettings);
+}
+
+export function applyMediaViewports(
+  container: HTMLElement,
+  globalSettings: ImageViewportSettings,
+): void {
+  container.querySelectorAll('figure.media-figure video').forEach((video) => {
+    const element = video as HTMLVideoElement;
+    const title = element.getAttribute('title');
+    const override = parseViewportTitle(title);
+    const centered = parseCenteredTitle(title);
+
+    let viewport = element.closest('.media-viewport') as HTMLElement | null;
+    if (!viewport) {
+      viewport = document.createElement('div');
+      viewport.className = 'media-viewport';
+      element.parentNode?.insertBefore(viewport, element);
+      viewport.append(element);
+    }
+
+    viewport.className = 'media-viewport';
+    viewport.style.maxWidth = '';
+    viewport.style.maxHeight = '';
+    viewport.style.width = '';
+    element.style.maxWidth = '';
+    element.style.maxHeight = '';
+    element.style.width = '';
+    element.style.height = '';
+
+    const width = override?.width ?? (globalSettings.enabled ? globalSettings.width : undefined);
+    const height = override?.height ?? (globalSettings.enabled ? globalSettings.height : undefined);
+
+    if (width && height) {
+      viewport.classList.add('media-viewport-custom');
+      viewport.style.maxWidth = `${width}px`;
+      viewport.style.maxHeight = `${height}px`;
+      element.style.maxWidth = '100%';
+      element.style.height = 'auto';
+      if (override) viewport.dataset.customViewport = 'true';
+    } else {
+      viewport.classList.add('media-viewport-natural');
+      element.style.maxWidth = '100%';
+      element.style.height = 'auto';
+    }
+
+    const figure = element.closest('figure.media-figure') as HTMLElement | null;
+    if (centered || figure?.classList.contains('media-figure-centered')) {
+      figure?.classList.add('media-figure-centered');
+      viewport.classList.add('media-embed-centered');
+    }
+
+    if (override || centered) {
+      element.removeAttribute('title');
     }
   });
 }
@@ -198,6 +357,12 @@ function resetViewport(viewport: HTMLElement, img: HTMLImageElement): void {
 function applyNaturalViewport(viewport: HTMLElement, img: HTMLImageElement): void {
   viewport.classList.add('image-viewport-natural');
   img.classList.add('image-natural');
+}
+
+function applyCenteredImage(viewport: HTMLElement | null, img: HTMLImageElement): void {
+  const figure = img.closest('figure.image-figure') as HTMLElement | null;
+  figure?.classList.add('image-figure-centered');
+  (viewport ?? img).classList.add('image-embed-centered');
 }
 
 function applyCustomViewport(

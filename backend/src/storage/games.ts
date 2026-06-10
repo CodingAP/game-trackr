@@ -7,6 +7,7 @@ import type {
   FullJournalData,
   GameMapsData,
   GameMeta,
+  ImageLibraryData,
   JournalData,
   JournalExportBundle,
   JournalExportImage,
@@ -22,7 +23,12 @@ import {
 } from '../migration/journal.js';
 import type { MobyGamesGameInfo } from '../services/mobygames.js';
 import { fetchMobyGameInfo } from '../services/mobygames.js';
-import { filterImageFilenames, sanitizeImportFilename } from './imageFiles.js';
+import {
+  filterImageFilenames,
+  MAX_MEDIA_BYTES,
+  MAX_MEDIA_SIZE_LABEL,
+  sanitizeImportFilename,
+} from './imageFiles.js';
 
 interface MobyGamesStore extends MobyGamesLink {
   cachedInfo?: MobyGamesGameInfo;
@@ -34,11 +40,11 @@ export const DATA_DIR = path.resolve(__dirname, '../../data/games');
 const INDEX_PATH = path.join(DATA_DIR, 'index.json');
 const EMPTY_TAGS: CompletionTagsData = { tags: [] };
 const EMPTY_CHECKBOXES: CheckboxConnectionsData = { checkboxes: [] };
+const EMPTY_IMAGE_LIBRARY: ImageLibraryData = { images: [] };
 const EMPTY_MAPS: GameMapsData = { maps: [] };
 const DEFAULT_MAIN_PAGE_ID = 'main';
 const DEFAULT_CONTENT = '# New Game\n\n- [[cb:goal-1]] Add your first goal\n';
 const DEFAULT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_IMPORT_IMAGE_BYTES = 5 * 1024 * 1024;
 
 const IMAGE_MIME_BY_EXT: Record<string, string> = {
   '.avif': 'image/avif',
@@ -83,9 +89,83 @@ export async function readGameIndex(): Promise<GameMeta[]> {
   }
 }
 
+let indexMutationQueue: Promise<unknown> = Promise.resolve();
+
+async function withIndexLock<T>(operation: () => Promise<T>): Promise<T> {
+  const result = indexMutationQueue.then(() => operation());
+  indexMutationQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
 async function writeGameIndex(games: GameMeta[]): Promise<void> {
   await ensureDataDir();
-  await fs.writeFile(INDEX_PATH, JSON.stringify(games, null, 2));
+  const tempPath = `${INDEX_PATH}.${process.pid}.${Date.now()}.tmp`;
+  await fs.writeFile(tempPath, JSON.stringify(games, null, 2), 'utf-8');
+  await fs.rename(tempPath, INDEX_PATH);
+}
+
+async function touchGameUpdatedAt(slug: string): Promise<GameMeta> {
+  return withIndexLock(async () => {
+    const games = await readGameIndex();
+    const index = games.findIndex((game) => game.slug === slug);
+    if (index === -1) {
+      throw new Error('Game not found');
+    }
+
+    games[index] = { ...games[index], updatedAt: new Date().toISOString() };
+    await writeGameIndex(games);
+    return games[index];
+  });
+}
+
+async function writeJournalFiles(slug: string, data: FullJournalData): Promise<void> {
+  const dir = gameDir(slug);
+  const journal: JournalData = {
+    version: data.version,
+    pages: data.pages,
+  };
+
+  await fs.mkdir(pagesDir(dir), { recursive: true });
+  await fs.writeFile(journalPath(dir), JSON.stringify(journal, null, 2));
+
+  const pageIds = new Set(data.pages.map((page) => page.id));
+  for (const [pageId, content] of Object.entries(data.contents)) {
+    if (!pageIds.has(pageId)) continue;
+    await fs.writeFile(pageContentPath(dir, pageId), content);
+  }
+
+  const mainContent =
+    data.contents[DEFAULT_MAIN_PAGE_ID] ?? data.contents[data.pages[0]?.id ?? ''] ?? '';
+  await fs.writeFile(contentPath(slug), mainContent);
+}
+
+export interface EditorStateData {
+  journal: FullJournalData;
+  checkboxes: CheckboxConnectionsData;
+  completionTags: CompletionTagsData;
+  maps: GameMapsData;
+  imageLibrary: ImageLibraryData;
+}
+
+export async function writeEditorState(slug: string, data: EditorStateData): Promise<GameMeta> {
+  const game = await getGame(slug);
+  if (!game) {
+    throw new Error('Game not found');
+  }
+
+  const dir = gameDir(slug);
+  await Promise.all([
+    writeJournalFiles(slug, data.journal),
+    fs.writeFile(checkboxesPath(dir), JSON.stringify(data.checkboxes, null, 2)),
+    fs.writeFile(completionTagsPath(slug), JSON.stringify(data.completionTags, null, 2)),
+    fs.writeFile(mapsPath(slug), JSON.stringify(data.maps, null, 2)),
+    fs.writeFile(imageLibraryPath(slug), JSON.stringify(data.imageLibrary, null, 2)),
+  ]);
+
+  return touchGameUpdatedAt(slug);
 }
 
 export function gameDir(slug: string): string {
@@ -108,6 +188,10 @@ export function mapsPath(slug: string): string {
   return path.join(gameDir(slug), 'maps.json');
 }
 
+export function imageLibraryPath(slug: string): string {
+  return path.join(gameDir(slug), 'image-library.json');
+}
+
 export function mobyGamesLinkPath(slug: string): string {
   return path.join(gameDir(slug), 'mobygames.json');
 }
@@ -122,11 +206,6 @@ export async function createGame(
   name: string,
   content = DEFAULT_CONTENT,
 ): Promise<GameMeta> {
-  const games = await readGameIndex();
-  if (games.some((game) => game.slug === slug)) {
-    throw new Error('Game already exists');
-  }
-
   const now = new Date().toISOString();
   const meta: GameMeta = { slug, name, createdAt: now, updatedAt: now };
   const dir = gameDir(slug);
@@ -153,8 +232,15 @@ export async function createGame(
   await fs.writeFile(checkboxesPath(dir), JSON.stringify(checkboxes, null, 2));
   await fs.writeFile(completionTagsPath(slug), JSON.stringify(EMPTY_TAGS, null, 2));
   await fs.writeFile(mapsPath(slug), JSON.stringify(EMPTY_MAPS, null, 2));
-  games.push(meta);
-  await writeGameIndex(games);
+
+  await withIndexLock(async () => {
+    const games = await readGameIndex();
+    if (games.some((game) => game.slug === slug)) {
+      throw new Error('Game already exists');
+    }
+    games.push(meta);
+    await writeGameIndex(games);
+  });
 
   return meta;
 }
@@ -172,35 +258,13 @@ export async function readJournal(slug: string): Promise<FullJournalData> {
 }
 
 export async function writeJournal(slug: string, data: FullJournalData): Promise<GameMeta> {
-  const games = await readGameIndex();
-  const index = games.findIndex((game) => game.slug === slug);
-  if (index === -1) {
+  const game = await getGame(slug);
+  if (!game) {
     throw new Error('Game not found');
   }
 
-  const dir = gameDir(slug);
-  const journal: JournalData = {
-    version: data.version,
-    pages: data.pages,
-  };
-
-  await fs.mkdir(pagesDir(dir), { recursive: true });
-  await fs.writeFile(journalPath(dir), JSON.stringify(journal, null, 2));
-
-  const pageIds = new Set(data.pages.map((page) => page.id));
-  for (const [pageId, content] of Object.entries(data.contents)) {
-    if (!pageIds.has(pageId)) continue;
-    await fs.writeFile(pageContentPath(dir, pageId), content);
-  }
-
-  const mainContent =
-    data.contents[DEFAULT_MAIN_PAGE_ID] ?? data.contents[data.pages[0]?.id ?? ''] ?? '';
-  await fs.writeFile(contentPath(slug), mainContent);
-
-  games[index] = { ...games[index], updatedAt: new Date().toISOString() };
-  await writeGameIndex(games);
-
-  return games[index];
+  await writeJournalFiles(slug, data);
+  return touchGameUpdatedAt(slug);
 }
 
 export async function readCheckboxes(slug: string): Promise<CheckboxConnectionsData> {
@@ -228,27 +292,17 @@ export async function writeCheckboxes(
   }
 
   await fs.writeFile(checkboxesPath(gameDir(slug)), JSON.stringify(data, null, 2));
-
-  const games = await readGameIndex();
-  const index = games.findIndex((entry) => entry.slug === slug);
-  games[index] = { ...games[index], updatedAt: new Date().toISOString() };
-  await writeGameIndex(games);
-
-  return games[index];
+  return touchGameUpdatedAt(slug);
 }
 
 export async function writeContent(slug: string, content: string): Promise<GameMeta> {
-  const games = await readGameIndex();
-  const index = games.findIndex((game) => game.slug === slug);
-  if (index === -1) {
+  const game = await getGame(slug);
+  if (!game) {
     throw new Error('Game not found');
   }
 
   await fs.writeFile(contentPath(slug), content);
-  games[index] = { ...games[index], updatedAt: new Date().toISOString() };
-  await writeGameIndex(games);
-
-  return games[index];
+  return touchGameUpdatedAt(slug);
 }
 
 export async function readCompletionTags(slug: string): Promise<CompletionTagsData> {
@@ -267,13 +321,31 @@ export async function writeCompletionTags(slug: string, data: CompletionTagsData
   }
 
   await fs.writeFile(completionTagsPath(slug), JSON.stringify(data, null, 2));
+  return touchGameUpdatedAt(slug);
+}
 
-  const games = await readGameIndex();
-  const index = games.findIndex((entry) => entry.slug === slug);
-  games[index] = { ...games[index], updatedAt: new Date().toISOString() };
-  await writeGameIndex(games);
+export async function readImageLibrary(slug: string): Promise<ImageLibraryData> {
+  try {
+    const raw = await fs.readFile(imageLibraryPath(slug), 'utf-8');
+    const parsed = JSON.parse(raw) as ImageLibraryData;
+    if (!Array.isArray(parsed.images)) return EMPTY_IMAGE_LIBRARY;
+    return parsed;
+  } catch {
+    return EMPTY_IMAGE_LIBRARY;
+  }
+}
 
-  return games[index];
+export async function writeImageLibrary(
+  slug: string,
+  data: ImageLibraryData,
+): Promise<GameMeta> {
+  const game = await getGame(slug);
+  if (!game) {
+    throw new Error('Game not found');
+  }
+
+  await fs.writeFile(imageLibraryPath(slug), JSON.stringify(data, null, 2));
+  return touchGameUpdatedAt(slug);
 }
 
 export async function readMaps(slug: string): Promise<GameMapsData> {
@@ -294,13 +366,7 @@ export async function writeMaps(slug: string, data: GameMapsData): Promise<GameM
   }
 
   await fs.writeFile(mapsPath(slug), JSON.stringify(data, null, 2));
-
-  const games = await readGameIndex();
-  const index = games.findIndex((entry) => entry.slug === slug);
-  games[index] = { ...games[index], updatedAt: new Date().toISOString() };
-  await writeGameIndex(games);
-
-  return games[index];
+  return touchGameUpdatedAt(slug);
 }
 
 export async function readMobyGamesStore(slug: string): Promise<MobyGamesStore | null> {
@@ -343,11 +409,7 @@ export async function writeMobyGamesLink(
   };
 
   await writeMobyGamesStore(slug, store);
-
-  const games = await readGameIndex();
-  const index = games.findIndex((entry) => entry.slug === slug);
-  games[index] = { ...games[index], updatedAt: now };
-  await writeGameIndex(games);
+  await touchGameUpdatedAt(slug);
 
   return { gameId, linkedAt: now };
 }
@@ -370,11 +432,7 @@ export async function deleteMobyGamesLink(slug: string): Promise<void> {
   }
 
   await fs.rm(mobyGamesLinkPath(slug), { force: true });
-
-  const games = await readGameIndex();
-  const index = games.findIndex((entry) => entry.slug === slug);
-  games[index] = { ...games[index], updatedAt: new Date().toISOString() };
-  await writeGameIndex(games);
+  await touchGameUpdatedAt(slug);
 }
 
 export async function readMobyGamesInfo(
@@ -401,13 +459,15 @@ export async function readMobyGamesInfo(
 }
 
 export async function deleteGame(slug: string): Promise<void> {
-  const games = await readGameIndex();
-  const next = games.filter((game) => game.slug !== slug);
-  if (next.length === games.length) {
-    throw new Error('Game not found');
-  }
+  await withIndexLock(async () => {
+    const games = await readGameIndex();
+    const next = games.filter((game) => game.slug !== slug);
+    if (next.length === games.length) {
+      throw new Error('Game not found');
+    }
 
-  await writeGameIndex(next);
+    await writeGameIndex(next);
+  });
   await fs.rm(gameDir(slug), { recursive: true, force: true });
 }
 
@@ -436,17 +496,19 @@ export async function duplicateGame(
     throw new Error('Source game not found');
   }
 
-  const games = await readGameIndex();
-  if (games.some((game) => game.slug === newSlug)) {
-    throw new Error('Game already exists');
-  }
-
   await copyDirectory(gameDir(sourceSlug), gameDir(newSlug));
 
   const now = new Date().toISOString();
   const meta: GameMeta = { slug: newSlug, name: newName, createdAt: now, updatedAt: now };
-  games.push(meta);
-  await writeGameIndex(games);
+
+  await withIndexLock(async () => {
+    const games = await readGameIndex();
+    if (games.some((game) => game.slug === newSlug)) {
+      throw new Error('Game already exists');
+    }
+    games.push(meta);
+    await writeGameIndex(games);
+  });
 
   return meta;
 }
@@ -472,6 +534,23 @@ function rewriteMapsImageUrls(maps: GameMapsData, sourceSlug: string, targetSlug
   };
 }
 
+function rewriteImageLibraryUrls(
+  library: ImageLibraryData,
+  sourceSlug: string,
+  targetSlug: string,
+): ImageLibraryData {
+  if (sourceSlug === targetSlug) return library;
+  return {
+    images: library.images.map((entry) => ({
+      ...entry,
+      url: entry.url.replaceAll(
+        `/uploads/games/${sourceSlug}/images/`,
+        `/uploads/games/${targetSlug}/images/`,
+      ),
+    })),
+  };
+}
+
 function mimeTypeForFilename(filename: string): string {
   const ext = path.extname(filename).toLowerCase();
   return IMAGE_MIME_BY_EXT[ext] ?? 'application/octet-stream';
@@ -483,11 +562,12 @@ export async function exportGameJournal(slug: string): Promise<JournalExportBund
     throw new Error('Game not found');
   }
 
-  const [journal, checkboxes, completionTags, maps] = await Promise.all([
+  const [journal, checkboxes, completionTags, maps, imageLibrary] = await Promise.all([
     readJournal(slug),
     readCheckboxes(slug),
     readCompletionTags(slug),
     readMaps(slug),
+    readImageLibrary(slug),
   ]);
   let filenames: string[] = [];
 
@@ -517,6 +597,7 @@ export async function exportGameJournal(slug: string): Promise<JournalExportBund
     checkboxes,
     completionTags,
     maps,
+    imageLibrary,
     images,
   };
 }
@@ -530,14 +611,10 @@ export async function importGameJournal(
     checkboxes: CheckboxConnectionsData;
     completionTags: CompletionTagsData;
     maps?: GameMapsData;
+    imageLibrary?: ImageLibraryData;
     images: JournalExportImage[];
   },
 ): Promise<GameMeta> {
-  const games = await readGameIndex();
-  if (games.some((game) => game.slug === slug)) {
-    throw new Error('Game already exists');
-  }
-
   const sourceSlug = bundle.sourceSlug ?? slug;
   const rewrittenContents: Record<string, string> = {};
   for (const [pageId, content] of Object.entries(bundle.journal.contents)) {
@@ -552,6 +629,7 @@ export async function importGameJournal(
   const checkboxes = bundle.checkboxes ?? EMPTY_CHECKBOXES;
   const completionTags = bundle.completionTags ?? EMPTY_TAGS;
   const maps = rewriteMapsImageUrls(bundle.maps ?? EMPTY_MAPS, sourceSlug, slug);
+  const imageLibrary = rewriteImageLibraryUrls(bundle.imageLibrary ?? EMPTY_IMAGE_LIBRARY, sourceSlug, slug);
 
   const dir = gameDir(slug);
   await fs.mkdir(imagesDir(slug), { recursive: true });
@@ -568,6 +646,7 @@ export async function importGameJournal(
   await fs.writeFile(checkboxesPath(dir), JSON.stringify(checkboxes, null, 2));
   await fs.writeFile(completionTagsPath(slug), JSON.stringify(completionTags, null, 2));
   await fs.writeFile(mapsPath(slug), JSON.stringify(maps, null, 2));
+  await fs.writeFile(imageLibraryPath(slug), JSON.stringify(imageLibrary, null, 2));
 
   for (const image of bundle.images ?? []) {
     const filename = sanitizeImportFilename(image.filename);
@@ -581,8 +660,8 @@ export async function importGameJournal(
     }
 
     if (buffer.length === 0) continue;
-    if (buffer.length > MAX_IMPORT_IMAGE_BYTES) {
-      throw new Error(`Image ${filename} exceeds the 5 MB import limit`);
+    if (buffer.length > MAX_MEDIA_BYTES) {
+      throw new Error(`Media file ${filename} exceeds the ${MAX_MEDIA_SIZE_LABEL} import limit`);
     }
 
     await fs.writeFile(path.join(imagesDir(slug), filename), buffer);
@@ -590,8 +669,15 @@ export async function importGameJournal(
 
   const now = new Date().toISOString();
   const meta: GameMeta = { slug, name, createdAt: now, updatedAt: now };
-  games.push(meta);
-  await writeGameIndex(games);
+
+  await withIndexLock(async () => {
+    const games = await readGameIndex();
+    if (games.some((game) => game.slug === slug)) {
+      throw new Error('Game already exists');
+    }
+    games.push(meta);
+    await writeGameIndex(games);
+  });
 
   return meta;
 }

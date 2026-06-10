@@ -4,8 +4,7 @@ import {
   detectImageBuffer,
   isAllowedRemoteContentType,
 } from '../storage/imageMagic.js';
-
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+import { MAX_MEDIA_BYTES, MAX_MEDIA_SIZE_LABEL } from '../storage/imageFiles.js';
 const MAX_REDIRECTS = 5;
 const FETCH_TIMEOUT_MS = 15_000;
 
@@ -70,8 +69,8 @@ async function assertSafeRemoteUrl(url: URL): Promise<void> {
 
 async function readResponseBody(response: Response): Promise<Buffer> {
   const contentLength = response.headers.get('content-length');
-  if (contentLength && Number(contentLength) > MAX_IMAGE_BYTES) {
-    throw new Error('Image file is too large (max 5 MB)');
+  if (contentLength && Number(contentLength) > MAX_MEDIA_BYTES) {
+    throw new Error(`Media file is too large (max ${MAX_MEDIA_SIZE_LABEL})`);
   }
 
   const reader = response.body?.getReader();
@@ -88,8 +87,8 @@ async function readResponseBody(response: Response): Promise<Buffer> {
     if (!value) continue;
 
     total += value.byteLength;
-    if (total > MAX_IMAGE_BYTES) {
-      throw new Error('Image file is too large (max 5 MB)');
+    if (total > MAX_MEDIA_BYTES) {
+      throw new Error(`Media file is too large (max ${MAX_MEDIA_SIZE_LABEL})`);
     }
 
     chunks.push(Buffer.from(value));
@@ -133,7 +132,7 @@ async function fetchRemoteResponse(startUrl: URL): Promise<{ buffer: Buffer; con
 
       const contentType = response.headers.get('content-type');
       if (!isAllowedRemoteContentType(contentType)) {
-        throw new Error('URL did not return an image file');
+        throw new Error('URL did not return a supported image or video file');
       }
 
       const buffer = await readResponseBody(response);

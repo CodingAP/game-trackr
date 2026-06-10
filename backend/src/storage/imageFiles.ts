@@ -1,5 +1,8 @@
 import path from 'node:path';
 
+export const MAX_MEDIA_BYTES = 100 * 1024 * 1024;
+export const MAX_MEDIA_SIZE_LABEL = '100 MB';
+
 const IMAGE_EXTENSIONS = new Set([
   '.avif',
   '.bmp',
@@ -11,6 +14,7 @@ const IMAGE_EXTENSIONS = new Set([
   '.svg',
   '.webm',
   '.webp',
+  '.mp4',
 ]);
 
 export function isImageFilename(filename: string): boolean {

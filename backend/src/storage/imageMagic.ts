@@ -43,6 +43,9 @@ export function detectImageBuffer(buffer: Buffer): DetectedImage | null {
     if (brand === 'avif' || brand === 'avis') {
       return { ext: '.avif', mime: 'image/avif' };
     }
+    if (['isom', 'iso2', 'mp41', 'mp42', 'avc1', 'M4V ', 'mmp4'].includes(brand)) {
+      return { ext: '.mp4', mime: 'video/mp4' };
+    }
   }
 
   if (buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3) {
@@ -55,5 +58,5 @@ export function detectImageBuffer(buffer: Buffer): DetectedImage | null {
 export function isAllowedRemoteContentType(contentType: string | null): boolean {
   if (!contentType) return true;
   const mime = contentType.split(';')[0]?.trim().toLowerCase() ?? '';
-  return mime.startsWith('image/') || mime === 'video/webm';
+  return mime.startsWith('image/') || mime === 'video/webm' || mime === 'video/mp4';
 }

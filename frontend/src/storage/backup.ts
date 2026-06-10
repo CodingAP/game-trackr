@@ -137,7 +137,7 @@ export function describeBackupContents(keys: string[]): string {
     'game-tracking:playtime': 'playtime logs',
     'game-tracking:notes': 'notes',
     'game-tracking:theme': 'theme',
-    'game-tracking:image-viewport': 'image viewport settings',
+    'game-tracking:image-viewport': 'media viewport settings',
   };
 
   return keys.map((key) => labels[key] ?? key).join(', ');

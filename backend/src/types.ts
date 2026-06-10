@@ -56,6 +56,20 @@ export interface CheckboxConnectionsData {
   checkboxes: ManagedCheckbox[];
 }
 
+export interface ImageLibraryEntry {
+  url: string;
+  filename: string;
+  alt: string;
+  source?: {
+    label: string;
+    url: string;
+  };
+}
+
+export interface ImageLibraryData {
+  images: ImageLibraryEntry[];
+}
+
 export interface MapViewport {
   width: number;
   height: number;
@@ -133,6 +147,7 @@ export interface JournalExportBundle {
   checkboxes: CheckboxConnectionsData;
   completionTags: CompletionTagsData;
   maps?: GameMapsData;
+  imageLibrary?: ImageLibraryData;
   images: JournalExportImage[];
 }
 
@@ -144,5 +159,14 @@ export interface ImportGameBody {
   checkboxes: CheckboxConnectionsData;
   completionTags: CompletionTagsData;
   maps?: GameMapsData;
+  imageLibrary?: ImageLibraryData;
   images: JournalExportImage[];
+}
+
+export interface EditorStateBody {
+  journal: FullJournalData;
+  checkboxes: CheckboxConnectionsData;
+  completionTags: CompletionTagsData;
+  maps: GameMapsData;
+  imageLibrary: ImageLibraryData;
 }

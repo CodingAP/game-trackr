@@ -4,8 +4,13 @@ type RouteHandler = (match: RouteMatch) => void;
 
 let handler: RouteHandler | null = null;
 
-function parseHash(hash: string): RouteMatch {
-  const path = hash.replace(/^#\/?/, '');
+function normalizePath(path: string): string {
+  const stripped = path.replace(/^#+/, '').replace(/^\/+/, '').replace(/\/+$/, '');
+  return stripped ? `/${stripped}` : '/';
+}
+
+function parsePath(pathname: string): RouteMatch {
+  const path = pathname.replace(/^\/+/, '');
   const segments = path.split('/').filter(Boolean);
 
   if (segments.length === 0) {
@@ -37,20 +42,40 @@ function parseHash(hash: string): RouteMatch {
 
 function dispatch(): void {
   if (!handler) return;
-  handler(parseHash(window.location.hash));
+  handler(parsePath(window.location.pathname));
+}
+
+function migrateLegacyHashUrl(): void {
+  const hash = window.location.hash;
+  if (!hash) return;
+
+  const path = normalizePath(hash);
+  history.replaceState(null, '', path);
 }
 
 export function initRouter(onRoute: RouteHandler): void {
   handler = onRoute;
-  window.addEventListener('hashchange', dispatch);
+  window.addEventListener('popstate', dispatch);
+
+  migrateLegacyHashUrl();
+
+  const normalized = normalizePath(window.location.pathname);
+  if (window.location.pathname !== normalized) {
+    history.replaceState(null, '', normalized);
+  }
+
   dispatch();
 }
 
 export function navigate(path: string): void {
-  window.location.hash = path.startsWith('#') ? path : `#/${path}`;
+  const normalized = normalizePath(path);
+  if (window.location.pathname !== normalized) {
+    history.pushState(null, '', normalized);
+  }
+  dispatch();
 }
 
 export function destroyRouter(): void {
-  window.removeEventListener('hashchange', dispatch);
+  window.removeEventListener('popstate', dispatch);
   handler = null;
 }

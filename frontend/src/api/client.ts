@@ -9,9 +9,11 @@ import type {
   AuthStatus,
   CheckboxConnectionsData,
   CompletionTagsData,
+  EditorStateBody,
   FullJournalData,
   GameMapsData,
   GameMeta,
+  ImageLibraryData,
   ImportGameRequest,
   JournalExportBundle,
   MobyGamesGameInfo,
@@ -160,6 +162,34 @@ export async function saveMaps(slug: string, data: GameMapsData): Promise<GameMe
   );
 }
 
+export async function fetchImageLibrary(slug: string): Promise<ImageLibraryData> {
+  return request<ImageLibraryData>(`/api/games/${slug}/image-library`);
+}
+
+export async function saveImageLibrary(slug: string, data: ImageLibraryData): Promise<GameMeta> {
+  return request<GameMeta>(
+    `/api/games/${slug}/image-library`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+    true,
+  );
+}
+
+export async function saveEditorState(slug: string, data: EditorStateBody): Promise<GameMeta> {
+  return request<GameMeta>(
+    `/api/games/${slug}/editor-state`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+    true,
+  );
+}
+
 export async function createGame(slug: string, name: string, content?: string): Promise<GameMeta> {
   return request<GameMeta>(
     '/api/games',
@@ -225,6 +255,27 @@ export async function uploadGameImageFromUrl(
 
 export async function fetchGameImages(slug: string): Promise<UploadedImage[]> {
   return request<UploadedImage[]>(`/api/games/${slug}/images`);
+}
+
+export async function deleteGameImage(slug: string, filename: string): Promise<void> {
+  const response = await fetch(
+    `/api/games/${slug}/images/${encodeURIComponent(filename)}`,
+    {
+      method: 'DELETE',
+      headers: authHeaders(),
+    },
+  );
+
+  if (response.status === 401) {
+    clearStoredAuth();
+    window.dispatchEvent(new CustomEvent('game-trackr:auth-changed'));
+    throw new AuthRequiredError('Your session expired. Sign in again.');
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(body.error ?? 'Delete failed');
+  }
 }
 
 export async function fetchCompletionTags(slug: string): Promise<CompletionTagsData> {

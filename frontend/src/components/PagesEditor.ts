@@ -38,7 +38,11 @@ export function mountPagesEditor(
 ): {
   getData: () => FullJournalData;
   getActivePageId: () => string;
-  cleanup: () => void;
+  getAllContents: () => Record<string, string>;
+    setPageContent: (pageId: string, content: string) => void;
+    setAllContents: (contents: Record<string, string>) => void;
+    getPageName: (pageId: string) => string;
+    cleanup: () => void;
 } {
   let pages = structuredClone(initial.pages).sort((a, b) => a.order - b.order);
   let contents = structuredClone(initial.contents);
@@ -54,12 +58,31 @@ export function mountPagesEditor(
   };
 
   const loadActivePage = () => {
-    editor.setValue(contents[activePageId] ?? '');
+    editor.setValue(contents[activePageId] ?? '', true);
   };
 
   const commitRename = (pageId: string, value: string) => {
     const page = pages.find((entry) => entry.id === pageId);
-    if (page) page.name = value.trim() || 'Untitled page';
+    if (!page) {
+      editingPageId = null;
+      return;
+    }
+
+    const name = value.trim() || 'Untitled page';
+    page.name = name;
+
+    const newId = uniquePageId(
+      name,
+      pages.filter((entry) => entry.id !== pageId),
+    );
+    if (newId !== pageId) {
+      contents[newId] = contents[pageId] ?? '';
+      delete contents[pageId];
+      page.id = newId;
+      if (activePageId === pageId) activePageId = newId;
+      if (editingPageId === pageId) editingPageId = newId;
+    }
+
     editingPageId = null;
   };
 
@@ -262,6 +285,26 @@ export function mountPagesEditor(
       };
     },
     getActivePageId: () => activePageId,
+    getAllContents: () => {
+      persistActivePage();
+      return { ...contents };
+    },
+    setPageContent: (pageId: string, content: string) => {
+      contents[pageId] = content;
+      if (pageId === activePageId && editor.getValue() !== content) {
+        editor.setValue(content);
+      }
+    },
+    setAllContents: (nextContents: Record<string, string>) => {
+      persistActivePage();
+      contents = { ...nextContents };
+      const nextActive = contents[activePageId] ?? '';
+      if (editor.getValue() !== nextActive) {
+        loadActivePage();
+      }
+    },
+    getPageName: (pageId: string) =>
+      pages.find((page) => page.id === pageId)?.name.trim() || 'Untitled page',
     cleanup: () => {
       cleanupSearch();
       persistActivePage();

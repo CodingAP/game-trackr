@@ -3,6 +3,7 @@ import type {
   CompletionTagsData,
   FullJournalData,
   GameMapsData,
+  ImageLibraryData,
   JournalExportBundle,
   JournalExportBundleV1,
   JournalExportImage,
@@ -75,6 +76,7 @@ export async function buildJournalExportBundle(
   checkboxes: CheckboxConnectionsData,
   completionTags: CompletionTagsData,
   maps: GameMapsData,
+  imageLibrary: ImageLibraryData,
   uploadedImages: UploadedImage[],
 ): Promise<JournalExportBundle> {
   const images: JournalExportImage[] = await Promise.all(
@@ -104,6 +106,7 @@ export async function buildJournalExportBundle(
     checkboxes,
     completionTags,
     maps,
+    imageLibrary,
     images,
   };
 }

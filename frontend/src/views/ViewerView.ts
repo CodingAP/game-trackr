@@ -17,7 +17,11 @@ import {
   refreshProgressUi,
   renderCompletionSummaryHtml,
 } from '../markdown/completionProgress.js';
-import { applyImageSources, applyImageViewports } from '../markdown/images.js';
+import {
+  applyImageSources,
+  applyImageViewports,
+  wireClickableJournalImages,
+} from '../markdown/images.js';
 import {
   buildCheckboxIndex,
   collectDescendantLeaves,
@@ -142,6 +146,7 @@ export async function renderViewer(
 
     let cleanupToc: (() => void) | null = null;
     let cleanupGameMaps: (() => void) | null = null;
+    let cleanupImageLinks: (() => void) | null = null;
     let cleanupReturnTop = wireReturnToTop(returnTopButton, viewerTop);
 
     const renderPage = (pageId: string) => {
@@ -157,6 +162,8 @@ export async function renderViewer(
       mountTagProgressBlocks(body, tags, checkboxes, progress.checkedItems, managed);
       applyImageSources(body);
       applyImageViewports(body, viewportSettings);
+      cleanupImageLinks?.();
+      cleanupImageLinks = wireClickableJournalImages(body);
       const syncCheckboxVisuals = wireCheckboxes(
         body,
         slug,
@@ -198,6 +205,7 @@ export async function renderViewer(
     }
 
     return () => {
+      cleanupImageLinks?.();
       cleanupGameMaps?.();
       cleanupCollapsible();
       cleanupPlaytime();

@@ -1,11 +1,16 @@
 import { renderCollapsiblePanel, wireCollapsiblePanels } from './CollapsiblePanel.js';
 import { renderListSearchBar, wireListSearch } from './listSearch.js';
-import { buildCheckboxMarker, slugifyCheckboxId } from '../markdown/managedCheckboxes.js';
+import {
+  buildCheckboxMarker,
+  inferCheckboxParentsFromJournal,
+  slugifyCheckboxId,
+} from '../markdown/managedCheckboxes.js';
 import { icon, iconLabel } from './icons.js';
 import type {
   CheckboxConnectionsData,
   CompletionTag,
   CompletionTagsData,
+  FullJournalData,
   ManagedCheckbox,
 } from '../types/index.js';
 import type { MarkdownEditorHandle } from '../types/markdownEditor.js';
@@ -34,14 +39,14 @@ function renderCheckboxPanelTitle(
   const tagText =
     assignedTags.length > 0
       ? assignedTags
-          .map((tag) => escapeHtml(tag.name.trim() || 'Untitled tag'))
+          .map((tag) => escapeHtml(tag.name.trim() || 'Untitled progress bar'))
           .join(', ')
       : 'None';
 
   return `
     <span class="checkbox-panel-title">
       <span class="checkbox-panel-title-main">${parentText} -&gt; ${label}</span>
-      <span class="checkbox-panel-title-tags">(Tags: ${tagText})</span>
+      <span class="checkbox-panel-title-tags">(Progress bars: ${tagText})</span>
     </span>
   `;
 }
@@ -74,7 +79,7 @@ function renderTagSection(checkbox: ManagedCheckbox, tags: CompletionTag[]): str
 
   return `
     <div class="checkbox-editor-tags mb-3">
-      <span class="label">Completion tags</span>
+      <span class="label">Progress bars</span>
       ${
         assigned.length > 0
           ? `
@@ -83,14 +88,14 @@ function renderTagSection(checkbox: ManagedCheckbox, tags: CompletionTag[]): str
                 .map(
                   (tag) => `
                     <span class="completion-chip completion-chip-compact">
-                      <span>${escapeHtml(tag.name.trim() || 'Untitled tag')}</span>
+                      <span>${escapeHtml(tag.name.trim() || 'Untitled progress bar')}</span>
                       <button
                         type="button"
                         class="completion-chip-remove"
                         data-action="remove-tag"
                         data-checkbox-id="${checkbox.id}"
                         data-tag-id="${tag.id}"
-                        aria-label="Remove tag"
+                        aria-label="Remove progress bar"
                       >${icon('close', 'ui-icon ui-icon-sm')}</button>
                     </span>
                   `,
@@ -98,17 +103,17 @@ function renderTagSection(checkbox: ManagedCheckbox, tags: CompletionTag[]): str
                 .join('')}
             </div>
           `
-          : '<p class="checkbox-tags-empty">No tags assigned.</p>'
+          : '<p class="checkbox-tags-empty">No progress bars assigned.</p>'
       }
       ${
         available.length > 0
           ? `
             <select class="input checkbox-tag-select" data-action="add-tag" data-checkbox-id="${checkbox.id}">
-              <option value="">Add tag...</option>
+              <option value="">Add progress bar...</option>
               ${available
                 .map(
                   (tag) =>
-                    `<option value="${tag.id}">${escapeHtml(tag.name.trim() || 'Untitled tag')}</option>`,
+                    `<option value="${tag.id}">${escapeHtml(tag.name.trim() || 'Untitled progress bar')}</option>`,
                 )
                 .join('')}
             </select>
@@ -119,14 +124,28 @@ function renderTagSection(checkbox: ManagedCheckbox, tags: CompletionTag[]): str
   `;
 }
 
+interface CheckboxConnectionsEditorOptions {
+  getJournalContents?: () => {
+    pages: FullJournalData['pages'];
+    contents: FullJournalData['contents'];
+  };
+  onParentsChanged?: () => void;
+}
+
 export function mountCheckboxConnectionsEditor(
   host: HTMLElement,
   editor: MarkdownEditorHandle,
   initial: CheckboxConnectionsData,
   getTags: () => CompletionTagsData,
+  options: CheckboxConnectionsEditorOptions = {},
 ): {
   getData: () => CheckboxConnectionsData;
   addCheckbox: (checkbox: ManagedCheckbox) => boolean;
+  updateCheckbox: (
+    id: string,
+    updates: { id?: string; label?: string },
+  ) => boolean;
+  syncParentsFromMarkdown: () => boolean;
   refresh: () => void;
   cleanup: () => void;
 } {
@@ -135,6 +154,41 @@ export function mountCheckboxConnectionsEditor(
   const pendingIdValues = new Map<string, string>();
   let searchQuery = '';
   let cleanupSearch = () => {};
+  let syncTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const syncParentsFromMarkdown = (): boolean => {
+    const sources = options.getJournalContents?.();
+    if (!sources) return false;
+
+    const parents = inferCheckboxParentsFromJournal(sources.pages, sources.contents);
+    let changed = false;
+
+    for (const checkbox of checkboxes) {
+      if (!parents.has(checkbox.id)) continue;
+      const nextParent = parents.get(checkbox.id) ?? null;
+      if (checkbox.parentId === nextParent) continue;
+      checkbox.parentId = nextParent;
+      changed = true;
+    }
+
+    if (changed) {
+      render();
+      options.onParentsChanged?.();
+    }
+
+    return changed;
+  };
+
+  const scheduleSyncParents = () => {
+    if (!options.getJournalContents) return;
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      syncTimer = null;
+      syncParentsFromMarkdown();
+    }, 200);
+  };
+
+  const cleanupChangeListener = editor.onChange(scheduleSyncParents);
 
   const syncFromDom = () => {
     host.querySelectorAll('[data-checkbox-label]').forEach((input) => {
@@ -208,19 +262,21 @@ export function mountCheckboxConnectionsEditor(
                       </label>
                     </div>
                     ${renderTagSection(checkbox, tags)}
-                    <div class="flex flex-wrap gap-2 mb-2">
-                      <button type="button" class="btn-secondary text-xs" data-action="insert-marker" data-checkbox-id="${checkbox.id}">
-                        ${iconLabel('plus', 'Insert in content', 'ui-icon ui-icon-sm')}
-                      </button>
-                      <button type="button" class="btn-secondary text-xs" data-action="remove-checkbox" data-checkbox-id="${checkbox.id}">
-                        ${iconLabel('trash', 'Remove', 'ui-icon ui-icon-sm')}
-                      </button>
-                    </div>
+                  `;
+
+                  const titleActions = `
+                    <button type="button" class="btn-secondary" data-action="insert-marker" data-checkbox-id="${checkbox.id}" aria-label="Insert in content">
+                      ${icon('plus', 'ui-icon ui-icon-sm')}
+                    </button>
+                    <button type="button" class="btn-secondary" data-action="remove-checkbox" data-checkbox-id="${checkbox.id}" aria-label="Remove checkbox">
+                      ${icon('trash', 'ui-icon ui-icon-sm')}
+                    </button>
                   `;
 
                   return renderCollapsiblePanel({
                     title,
                     titleHtml,
+                    titleActions,
                     className: 'checkbox-connection-card',
                     defaultOpen: expandedCheckboxes.has(checkbox.id),
                     attributes: {
@@ -368,6 +424,7 @@ export function mountCheckboxConnectionsEditor(
   });
 
   render();
+  syncParentsFromMarkdown();
 
   return {
     getData: () => ({
@@ -390,8 +447,38 @@ export function mountCheckboxConnectionsEditor(
       render();
       return true;
     },
+    updateCheckbox: (id: string, updates: { id?: string; label?: string }) => {
+      const checkbox = checkboxes.find((entry) => entry.id === id);
+      if (!checkbox) return false;
+
+      if (updates.label !== undefined) {
+        checkbox.label = updates.label.trim();
+      }
+
+      const nextId = updates.id?.trim();
+      if (nextId && nextId !== checkbox.id) {
+        if (checkboxes.some((entry) => entry.id === nextId)) return false;
+
+        const oldId = checkbox.id;
+        if (expandedCheckboxes.has(oldId)) {
+          expandedCheckboxes.delete(oldId);
+          expandedCheckboxes.add(nextId);
+        }
+        pendingIdValues.delete(oldId);
+        checkboxes.forEach((entry) => {
+          if (entry.parentId === oldId) entry.parentId = nextId;
+        });
+        checkbox.id = nextId;
+      }
+
+      render();
+      return true;
+    },
+    syncParentsFromMarkdown,
     refresh: render,
     cleanup: () => {
+      if (syncTimer) clearTimeout(syncTimer);
+      cleanupChangeListener();
       cleanupSearch();
       cleanupCollapsible();
     },

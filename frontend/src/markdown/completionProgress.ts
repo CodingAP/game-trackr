@@ -5,7 +5,11 @@ import {
   getProgressCheckboxes,
   isCheckboxComplete,
 } from './checkboxes.js';
-import { getTagCheckboxIds, managedToCheckboxItems } from './managedCheckboxes.js';
+import {
+  getTagCheckboxIds,
+  managedToCheckboxItems,
+  slugifyCheckboxId,
+} from './managedCheckboxes.js';
 import { renderCollapsiblePanel } from '../components/CollapsiblePanel.js';
 import { renderPlaytimeSectionHtml } from '../components/PlaytimePanel.js';
 import { getPlaytime } from '../storage/playtime.js';
@@ -17,6 +21,23 @@ export interface ProgressStats {
 }
 
 export const TAG_PROGRESS_MARKER = /\[\[(?:pb|tag-progress):([^\]]+)\]\]/g;
+export const PROGRESS_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export function slugifyProgressBarId(label: string, existing: Set<string>): string {
+  return slugifyCheckboxId(label.trim() || 'progress bar', existing);
+}
+
+export function replaceProgressMarkerReference(
+  content: string,
+  oldRef: string,
+  newRef: string,
+): string {
+  if (oldRef === newRef) return content;
+  return content.replace(TAG_PROGRESS_MARKER, (match, ref: string) => {
+    if (ref.trim() !== oldRef) return match;
+    return `[[pb:${newRef}]]`;
+  });
+}
 
 export function resolveTag(tags: CompletionTag[], reference: string): CompletionTag | undefined {
   const trimmed = reference.trim();
@@ -156,7 +177,7 @@ export function mountTagProgressBlocks(
     const ref = decodeURIComponent(element.getAttribute('data-tag-ref') ?? '');
     const tag = resolveTag(tags, ref);
     if (!tag) {
-      element.outerHTML = `<p class="tag-progress-unknown text-muted text-sm">Unknown completion tag: ${escapeHtml(ref)}</p>`;
+      element.outerHTML = `<p class="tag-progress-unknown text-muted text-sm">Unknown progress bar: ${escapeHtml(ref)}</p>`;
       return;
     }
 
@@ -207,6 +228,5 @@ export function buildCheckboxItemsFromManaged(managed: ManagedCheckbox[]): Check
 }
 
 export function buildTagProgressMarker(tag: CompletionTag): string {
-  const name = tag.name.trim() || 'Tag name';
-  return `[[pb:${name}]]`;
+  return `[[pb:${tag.id}]]`;
 }

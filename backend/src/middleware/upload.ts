@@ -1,6 +1,6 @@
 import multer from 'multer';
 import path from 'node:path';
-import { isImageFilename } from '../storage/imageFiles.js';
+import { isImageFilename, MAX_MEDIA_BYTES } from '../storage/imageFiles.js';
 import { imagesDir } from '../storage/games.js';
 
 export function createUploadMiddleware(slug: string) {
@@ -16,17 +16,21 @@ export function createUploadMiddleware(slug: string) {
 
   return multer({
     storage,
-    limits: { fileSize: 5 * 1024 * 1024 },
+    limits: { fileSize: MAX_MEDIA_BYTES },
     fileFilter: (_req, file, cb) => {
       if (!isImageFilename(file.originalname)) {
-        cb(new Error('Only image uploads are allowed'));
+        cb(new Error('Only media uploads are allowed'));
         return;
       }
 
-      if (file.mimetype.startsWith('image/') || file.mimetype === 'video/webm') {
+      if (
+        file.mimetype.startsWith('image/') ||
+        file.mimetype === 'video/webm' ||
+        file.mimetype === 'video/mp4'
+      ) {
         cb(null, true);
       } else {
-        cb(new Error('Only image uploads are allowed'));
+        cb(new Error('Only media uploads are allowed'));
       }
     },
   });
