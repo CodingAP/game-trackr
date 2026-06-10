@@ -591,7 +591,7 @@
     color: rgb(var(--text-heading));
   }
 
-  #completion-tags-editor {
+  #progress-bars-editor {
     @apply min-w-0 overflow-visible;
   }
 
@@ -970,12 +970,12 @@
     color: rgb(var(--text-muted));
   }
 
-  .completion-tag-card {
+  .progress-bar-card {
     @apply min-w-0 space-y-0;
   }
 
-  .completion-tag-card.collapsible-panel,
-  .completion-tag-card.collapsible-panel .collapsible-panel-body {
+  .progress-bar-card.collapsible-panel,
+  .progress-bar-card.collapsible-panel .collapsible-panel-body {
     overflow: visible;
   }
 
@@ -1002,11 +1002,11 @@
     color: rgb(var(--text-muted));
   }
 
-  .completion-tag-header {
+  .progress-bar-editor-header {
     @apply flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-end;
   }
 
-  .completion-tag-remove {
+  .progress-bar-editor-remove {
     @apply w-full shrink-0 sm:w-auto;
   }
 
@@ -1597,7 +1597,7 @@
     color: rgb(var(--text-muted));
   }
 
-  .completion-tag-card.collapsible-panel .collapsible-panel-title,
+  .progress-bar-card.collapsible-panel .collapsible-panel-title,
   .image-edit-card.collapsible-panel .collapsible-panel-title,
   .checkbox-connection-card.collapsible-panel .collapsible-panel-title,
   .map-editor-card.collapsible-panel .collapsible-panel-title {

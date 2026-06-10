@@ -1,6 +1,6 @@
 const VIDEO_EXTENSIONS = new Set(['.webm', '.mp4']);
 
-export function isVideoFilename(filename: string): boolean {
+function isVideoFilename(filename: string): boolean {
   const dot = filename.lastIndexOf('.');
   if (dot < 0) return false;
   return VIDEO_EXTENSIONS.has(filename.slice(dot).toLowerCase());

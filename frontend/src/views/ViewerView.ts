@@ -1,6 +1,6 @@
 import {
   fetchCheckboxConnections,
-  fetchCompletionTags,
+  fetchProgressBars,
   fetchGame,
   fetchGameJournal,
   fetchMaps,
@@ -43,7 +43,7 @@ import { buildToc, renderJournalTocNav, wireTocNav } from '../markdown/toc.js';
 import { getImageViewportSettings } from '../storage/settings.js';
 import { getProgress, setCheckboxStates } from '../storage/progress.js';
 import { isLocallyAuthenticated } from '../storage/auth.js';
-import type { CompletionTag, FullJournalData, ManagedCheckbox } from '../types/index.js';
+import type { ProgressBar, FullJournalData, ManagedCheckbox } from '../types/index.js';
 import { navigate } from '../router.js';
 import { icon, iconLabel } from '../components/icons.js';
 
@@ -60,11 +60,11 @@ export async function renderViewer(
   container.innerHTML = '<p class="text-muted">Loading journal...</p>';
 
   try {
-    const [game, journal, checkboxesData, tagsData, mapsData, mobyData] = await Promise.all([
+    const [game, journal, checkboxesData, progressBarsData, mapsData, mobyData] = await Promise.all([
       fetchGame(slug),
       fetchGameJournal(slug),
       fetchCheckboxConnections(slug),
-      fetchCompletionTags(slug),
+      fetchProgressBars(slug),
       fetchMaps(slug),
       fetchMobyGamesForGame(slug).catch(() => ({
         configured: false,
@@ -72,7 +72,7 @@ export async function renderViewer(
         info: null,
       })),
     ]);
-    const tags = tagsData.tags;
+    const progressBars = progressBarsData.tags;
     const managed = checkboxesData.checkboxes;
     const checkboxes = managedToCheckboxItems(managed);
     const progress = getProgress(slug);
@@ -80,7 +80,7 @@ export async function renderViewer(
     const gameInfoHtml = mobyData.info ? renderGameInfoHtml(mobyData.info) : '';
     const summaryHtml = renderCompletionSummaryHtml(
       slug,
-      tags,
+      progressBars,
       checkboxes,
       progress.checkedItems,
       managed,
@@ -159,7 +159,7 @@ export async function renderViewer(
       );
       cleanupGameMaps?.();
       mountGameMapBlocks(body, mapsData);
-      mountTagProgressBlocks(body, tags, checkboxes, progress.checkedItems, managed);
+      mountTagProgressBlocks(body, progressBars, checkboxes, progress.checkedItems, managed);
       applyImageSources(body);
       applyImageViewports(body, viewportSettings);
       cleanupImageLinks?.();
@@ -169,7 +169,7 @@ export async function renderViewer(
         slug,
         checkboxes,
         progress.checkedItems,
-        tags,
+        progressBars,
         managed,
         container,
       );
@@ -179,7 +179,7 @@ export async function renderViewer(
         checkedItems: progress.checkedItems,
         onProgressUpdate: (checkedItems) => {
           progress.checkedItems = checkedItems;
-          refreshProgressUi(container, tags, checkboxes, checkedItems, managed);
+          refreshProgressUi(container, progressBars, checkboxes, checkedItems, managed);
           syncCheckboxVisuals(checkedItems);
         },
       });
@@ -237,7 +237,7 @@ function wireCheckboxes(
   gameSlug: string,
   checkboxes: ReturnType<typeof managedToCheckboxItems>,
   checkedItems: Record<string, boolean>,
-  tags: CompletionTag[],
+  progressBars: ProgressBar[],
   managed: ManagedCheckbox[],
   root: HTMLElement,
 ): (state: Record<string, boolean>) => void {
@@ -290,7 +290,7 @@ function wireCheckboxes(
       const updated = setCheckboxStates(gameSlug, updates);
       syncCheckboxVisuals(updated.checkedItems);
       syncMapPointCompletionVisuals(container, managed, updated.checkedItems);
-      refreshProgressUi(root, tags, checkboxes, updated.checkedItems, managed);
+      refreshProgressUi(root, progressBars, checkboxes, updated.checkedItems, managed);
     });
   });
 

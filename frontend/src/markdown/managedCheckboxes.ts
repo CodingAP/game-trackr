@@ -3,6 +3,7 @@ import type { CheckboxItem } from './checkboxes.js';
 import { buildCheckboxIndex } from './checkboxes.js';
 
 export const MANAGED_CB_LINE = /^(\s*)- \[\[cb:([^\]]+)\]\]\s*(.*)$/;
+export const SLUG_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function replaceCheckboxMarkerId(content: string, oldId: string, newId: string): string {
   if (oldId === newId) return content;
@@ -33,13 +34,6 @@ export function parseCheckboxLine(line: string): {
     id,
     label: match[3].trim(),
   };
-}
-
-export function getLineRange(doc: string, pos: number): { from: number; to: number; text: string } {
-  const from = doc.lastIndexOf('\n', pos - 1) + 1;
-  const nextNewline = doc.indexOf('\n', pos);
-  const to = nextNewline === -1 ? doc.length : nextNewline;
-  return { from, to, text: doc.slice(from, to) };
 }
 
 export function slugifyCheckboxId(label: string, existing: Set<string>): string {
@@ -98,21 +92,6 @@ export function getTagCheckboxIds(tagId: string, checkboxes: ManagedCheckbox[]):
   return checkboxes.filter((cb) => cb.tagIds.includes(tagId)).map((cb) => cb.id);
 }
 
-const DOCUMENT_CHECKBOX_MARKER = /\[\[cb:([^\]]+)\]\]/g;
-
-export function getDocumentCheckboxIds(contents: Record<string, string>): Set<string> {
-  const ids = new Set<string>();
-
-  for (const content of Object.values(contents)) {
-    for (const match of content.matchAll(DOCUMENT_CHECKBOX_MARKER)) {
-      const id = match[1].trim();
-      if (id) ids.add(id);
-    }
-  }
-
-  return ids;
-}
-
 export function formatManagedCheckboxLabel(checkbox: ManagedCheckbox): string {
   return checkbox.label.trim() || checkbox.id || 'Untitled checkbox';
 }
@@ -163,33 +142,6 @@ export function preprocessManagedCheckboxMarkdown(content: string): string {
 
 export function collectManagedCheckboxInputs(root: HTMLElement): HTMLInputElement[] {
   return [...root.querySelectorAll('.managed-checkbox input[type="checkbox"][data-cb-id]')];
-}
-
-export function buildManagedCheckboxIndex(
-  checkboxes: ManagedCheckbox[],
-): Map<string, ManagedCheckbox> {
-  return new Map(checkboxes.map((cb) => [cb.id, cb]));
-}
-
-export function validateManagedCheckboxIds(checkboxes: ManagedCheckbox[]): string[] {
-  const errors: string[] = [];
-  const ids = new Set<string>();
-
-  for (const cb of checkboxes) {
-    if (!cb.id.trim()) {
-      errors.push('Every checkbox needs an id.');
-      continue;
-    }
-    if (ids.has(cb.id)) {
-      errors.push(`Duplicate checkbox id: ${cb.id}`);
-    }
-    ids.add(cb.id);
-    if (cb.parentId && !ids.has(cb.parentId) && !checkboxes.some((entry) => entry.id === cb.parentId)) {
-      errors.push(`Checkbox "${cb.id}" references unknown parent "${cb.parentId}".`);
-    }
-  }
-
-  return errors;
 }
 
 export function getIndentDepth(indent: string): number {

@@ -9,7 +9,7 @@ import { renderCollapsiblePanel, wireCollapsiblePanels } from './CollapsiblePane
 import { buildJournalExportBundle, downloadJournalBundle } from '../utils/journalBundle.js';
 import type {
   CheckboxConnectionsData,
-  CompletionTagsData,
+  ProgressBarsData,
   FullJournalData,
   GameMapsData,
   ImageLibraryData,
@@ -29,7 +29,7 @@ export function mountEditorAdmin(
   gameName: string,
   getJournal: () => FullJournalData,
   getCheckboxes: () => CheckboxConnectionsData,
-  getCompletionTags: () => CompletionTagsData,
+  getProgressBars: () => ProgressBarsData,
   getMaps: () => GameMapsData,
   getImageLibrary: () => ImageLibraryData,
   options: EditorAdminOptions = {},
@@ -124,7 +124,7 @@ export function mountEditorAdmin(
         gameName,
         getJournal(),
         getCheckboxes(),
-        getCompletionTags(),
+        getProgressBars(),
         getMaps(),
         getImageLibrary(),
         images,

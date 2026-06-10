@@ -4,7 +4,7 @@ import { openProgressInsertDialog } from '../components/ProgressInsertDialog.js'
 import { openCheckboxInsertDialog } from '../components/CheckboxInsertDialog.js';
 import { mountCheckboxConnectionsEditor } from '../components/CheckboxConnectionsEditor.js';
 import { wireCollapsiblePanels } from '../components/CollapsiblePanel.js';
-import { mountCompletionTagsEditor } from '../components/CompletionTagsEditor.js';
+import { mountProgressBarsEditor } from '../components/ProgressBarsEditor.js';
 import { mountEditorAdmin } from '../components/EditorAdmin.js';
 import { mountMobyGamesAdmin } from '../components/MobyGamesAdmin.js';
 import { mountEditorTabs } from '../components/EditorTabs.js';
@@ -15,7 +15,7 @@ import { mountPagesEditor } from '../components/PagesEditor.js';
 import type { MarkdownEditorHandle } from '../types/markdownEditor.js';
 import type {
   CheckboxConnectionsData,
-  CompletionTagsData,
+  ProgressBarsData,
   EditorTabId,
   FullJournalData,
   GameMapsData,
@@ -28,14 +28,14 @@ import {
   type MarkdownEmbedConfig,
 } from '../components/markdownEmbedExtension.js';
 import {
-  buildTagProgressMarker,
+  buildProgressBarMarker,
   replaceProgressMarkerReference,
 } from '../markdown/completionProgress.js';
-import type { CompletionTag } from '../types/index.js';
+import type { ProgressBar } from '../types/index.js';
 import {
   createGame,
   fetchCheckboxConnections,
-  fetchCompletionTags,
+  fetchProgressBars,
   fetchGame,
   fetchGameImages,
   fetchGameJournal,
@@ -70,7 +70,7 @@ const DEFAULT_CHECKBOXES: CheckboxConnectionsData = {
   ],
 };
 
-const EMPTY_TAGS: CompletionTagsData = { tags: [] };
+const EMPTY_PROGRESS_BARS: ProgressBarsData = { tags: [] };
 const EMPTY_MAPS: GameMapsData = { maps: [] };
 const EMPTY_IMAGE_LIBRARY: ImageLibraryData = { images: [] };
 
@@ -149,7 +149,7 @@ export async function renderEditor(
         <div id="tab-tags" class="editor-tab-panel" hidden>
           ${renderEditorTabHelp('tags')}
           <div class="editor-tab-panel-body">
-            <div id="completion-tags-editor"></div>
+            <div id="progress-bars-editor"></div>
           </div>
         </div>
 
@@ -174,14 +174,14 @@ export async function renderEditor(
   let activeSlug = slug;
   let cleanupImageEditor: (() => void) | null = null;
   let refreshUploadedImages: (() => Promise<void>) | null = null;
-  let cleanupTagsEditor: (() => void) | null = null;
+  let cleanupProgressBarsEditor: (() => void) | null = null;
   let cleanupCheckboxesEditor: (() => void) | null = null;
   let cleanupMapsEditor: (() => void) | null = null;
   let cleanupPagesEditor: (() => void) | null = null;
   let cleanupAdmin: (() => void) | null = null;
   let cleanupMobyGamesAdmin: (() => void) | null = null;
   let cleanupTabs: (() => void) | null = null;
-  let getTagsData: (() => import('../types/index.js').CompletionTagsData) | null = null;
+  let getProgressBarsData: (() => import('../types/index.js').ProgressBarsData) | null = null;
   let getJournalData: (() => import('../types/index.js').FullJournalData) | null = null;
   let getCheckboxesData: (() => import('../types/index.js').CheckboxConnectionsData) | null = null;
   let getMapsData: (() => import('../types/index.js').GameMapsData) | null = null;
@@ -194,8 +194,8 @@ export async function renderEditor(
     updates: { id?: string; label?: string },
   ) => boolean) | null = null;
   let setPageContent: ((pageId: string, content: string) => void) | null = null;
-  let registerTag: ((tag: import('../types/index.js').CompletionTag) => void) | null = null;
-  let updateTag: ((id: string, updates: { name?: string; id?: string }) => void) | null = null;
+  let registerProgressBar: ((bar: import('../types/index.js').ProgressBar) => void) | null = null;
+  let updateProgressBar: ((id: string, updates: { name?: string; id?: string }) => void) | null = null;
   let gameName = '';
   let cleanupTabHelp: (() => void) | null = null;
   let switchTab: ((id: EditorTabId) => void) | null = null;
@@ -250,7 +250,7 @@ export async function renderEditor(
 
   const persistEditorData = async (navigateAfter = false): Promise<boolean> => {
     if (editorDisposed || isNew || !activeSlug) return false;
-    if (!getJournalData || !getCheckboxesData || !getTagsData || !getMapsData) return false;
+    if (!getJournalData || !getCheckboxesData || !getProgressBarsData || !getMapsData) return false;
 
     if (saveInFlight) {
       if (navigateAfter) pendingNavigate = true;
@@ -285,7 +285,7 @@ export async function renderEditor(
       await saveEditorState(activeSlug, {
         journal,
         checkboxes: getCheckboxesData(),
-        completionTags: getTagsData(),
+        completionTags: getProgressBarsData(),
         maps: getMapsData(),
         imageLibrary: getImageLibraryData?.() ?? { images: [] },
       });
@@ -343,7 +343,7 @@ export async function renderEditor(
       target,
       context: {
         checkboxes: getCheckboxesData?.().checkboxes ?? [],
-        tags: getTagsData?.().tags ?? [],
+        progressBars: getProgressBarsData?.().tags ?? [],
         maps: getMapsData?.().maps ?? [],
       },
       imageLibrary: getImageLibraryData?.(),
@@ -367,11 +367,11 @@ export async function renderEditor(
 
         return true;
       },
-      onRegisterTag: (tag) => {
-        registerTag?.(tag);
+      onRegisterProgressBar: (bar) => {
+        registerProgressBar?.(bar);
       },
-      onUpdateTag: (id, updates) => {
-        updateTag?.(id, updates);
+      onUpdateProgressBar: (id, updates) => {
+        updateProgressBar?.(id, updates);
       },
       onContextChanged: () => {
         void refreshEmbedContext();
@@ -391,7 +391,7 @@ export async function renderEditor(
     markdownEditor.setEmbedConfig({
       context: {
         checkboxes: getCheckboxesData?.().checkboxes ?? [],
-        tags: getTagsData?.().tags ?? [],
+        progressBars: getProgressBarsData?.().tags ?? [],
         maps: getMapsData?.().maps ?? [],
       },
       onEditEmbed: handleEditEmbed,
@@ -414,15 +414,15 @@ export async function renderEditor(
     onOpenProgressPicker: () => {
       let markerRange: { from: number; to: number } | null = null;
 
-      const applyMarker = (tag: CompletionTag | null) => {
-        if (!tag) {
+      const applyMarker = (bar: ProgressBar | null) => {
+        if (!bar) {
           if (!markerRange) return;
           markdownEditor.applyChange({ from: markerRange.from, to: markerRange.to, insert: '' });
           markerRange = null;
           return;
         }
 
-        const marker = buildTagProgressMarker(tag);
+        const marker = buildProgressBarMarker(bar);
         if (!markerRange) {
           markerRange = markdownEditor.insertLine(marker);
           return;
@@ -433,15 +433,15 @@ export async function renderEditor(
       };
 
       openProgressInsertDialog({
-        tags: getTagsData?.().tags ?? [],
-        getTags: () => getTagsData?.().tags ?? [],
-        onCommitTag: applyMarker,
-        onRegisterTag: (tag) => {
-          registerTag?.(tag);
+        progressBars: getProgressBarsData?.().tags ?? [],
+        getProgressBars: () => getProgressBarsData?.().tags ?? [],
+        onCommitProgressBar: applyMarker,
+        onRegisterProgressBar: (bar) => {
+          registerProgressBar?.(bar);
           void refreshEmbedContext();
         },
-        onUpdateTag: (id, updates) => {
-          updateTag?.(id, updates);
+        onUpdateProgressBar: (id, updates) => {
+          updateProgressBar?.(id, updates);
           void refreshEmbedContext();
         },
       });
@@ -461,7 +461,7 @@ export async function renderEditor(
 
   let journal: FullJournalData = structuredClone(DEFAULT_JOURNAL);
   let checkboxes: CheckboxConnectionsData = structuredClone(DEFAULT_CHECKBOXES);
-  let tags: CompletionTagsData = structuredClone(EMPTY_TAGS);
+  let progressBars: ProgressBarsData = structuredClone(EMPTY_PROGRESS_BARS);
   let maps: GameMapsData = structuredClone(EMPTY_MAPS);
   let imageLibrary: ImageLibraryData = structuredClone(EMPTY_IMAGE_LIBRARY);
 
@@ -481,26 +481,26 @@ export async function renderEditor(
         };
       }
       if (draft.checkboxes) checkboxes = draft.checkboxes;
-      if (draft.completionTags) tags = draft.completionTags;
+      if (draft.completionTags) progressBars = draft.completionTags;
       if (draft.maps) maps = draft.maps;
     }
   }
 
   try {
     if (!isNew && activeSlug) {
-      const [game, fetchedJournal, fetchedCheckboxes, fetchedTags, fetchedMaps, fetchedImageLibrary] =
+      const [game, fetchedJournal, fetchedCheckboxes, fetchedProgressBars, fetchedMaps, fetchedImageLibrary] =
         await Promise.all([
           fetchGame(activeSlug),
           fetchGameJournal(activeSlug),
           fetchCheckboxConnections(activeSlug),
-          fetchCompletionTags(activeSlug),
+          fetchProgressBars(activeSlug),
           fetchMaps(activeSlug),
           fetchImageLibrary(activeSlug),
         ]);
       gameName = game.name;
       journal = fetchedJournal;
       checkboxes = fetchedCheckboxes;
-      tags = fetchedTags;
+      progressBars = fetchedProgressBars;
       maps = fetchedMaps;
       imageLibrary = fetchedImageLibrary;
       const titleEl = container.querySelector('#game-title');
@@ -601,31 +601,31 @@ export async function renderEditor(
         scheduleAutosave();
       };
 
-      const tagsEditor = mountCompletionTagsEditor(
-        container.querySelector('#completion-tags-editor') as HTMLElement,
+      const progressBarsEditor = mountProgressBarsEditor(
+        container.querySelector('#progress-bars-editor') as HTMLElement,
         markdownEditor,
-        tags,
+        progressBars,
         {
-          onTagIdChange: (oldId, newId) => {
+          onProgressBarIdChange: (oldId, newId) => {
             replaceProgressMarkersInJournal(oldId, newId);
           },
         },
       );
-      getTagsData = tagsEditor.getData;
-      registerTag = tagsEditor.registerTag;
-      updateTag = (id, updates) => {
+      getProgressBarsData = progressBarsEditor.getData;
+      registerProgressBar = progressBarsEditor.registerProgressBar;
+      updateProgressBar = (id, updates) => {
         if (updates.id && updates.id !== id) {
           replaceProgressMarkersInJournal(id, updates.id);
         }
-        tagsEditor.updateTag(id, updates);
+        progressBarsEditor.updateProgressBar(id, updates);
       };
-      cleanupTagsEditor = tagsEditor.cleanup;
+      cleanupProgressBarsEditor = progressBarsEditor.cleanup;
 
       const checkboxesEditor = mountCheckboxConnectionsEditor(
         container.querySelector('#checkbox-connections-editor') as HTMLElement,
         markdownEditor,
         checkboxes,
-        () => getTagsData?.() ?? { tags: [] },
+        () => getProgressBarsData?.() ?? { tags: [] },
         {
           getJournalContents: () => {
             const journal = getJournalData?.() ?? { pages: [], contents: {} };
@@ -659,7 +659,7 @@ export async function renderEditor(
 
       const getEmbedContext = () => ({
         checkboxes: getCheckboxesData?.().checkboxes ?? [],
-        tags: getTagsData?.().tags ?? [],
+        progressBars: getProgressBarsData?.().tags ?? [],
         maps: getMapsData?.().maps ?? [],
       });
 
@@ -678,7 +678,7 @@ export async function renderEditor(
         gameName,
         () => getJournalData?.() ?? journal,
         () => getCheckboxesData?.() ?? checkboxes,
-        () => getTagsData?.() ?? tags,
+        () => getProgressBarsData?.() ?? progressBars,
         () => getMapsData?.() ?? maps,
         () => getImageLibraryData?.() ?? imageLibrary,
         {
@@ -757,11 +757,11 @@ export async function renderEditor(
     );
     activeSlug = game.slug;
 
-    if (getCheckboxesData && getTagsData && getMapsData) {
+    if (getCheckboxesData && getProgressBarsData && getMapsData) {
       await saveEditorState(activeSlug, {
         journal: journalData,
         checkboxes: getCheckboxesData(),
-        completionTags: getTagsData(),
+        completionTags: getProgressBarsData(),
         maps: getMapsData(),
         imageLibrary: getImageLibraryData?.() ?? { images: [] },
       });
@@ -841,7 +841,7 @@ export async function renderEditor(
     cleanupImageEditor?.();
     cleanupMapsEditor?.();
     cleanupCheckboxesEditor?.();
-    cleanupTagsEditor?.();
+    cleanupProgressBarsEditor?.();
     cleanupMobyGamesAdmin?.();
     cleanupAdmin?.();
     markdownEditor.destroy();

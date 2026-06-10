@@ -77,7 +77,7 @@ function renderImageGrid(images: UploadedImage[]): string {
   `;
 }
 
-export async function openImageInsertDialog(options: {
+async function openImageInsertDialog(options: {
   slug: string;
   getImageLibrary?: () => ImageLibraryData;
   onInsert: (snippet: string) => void;

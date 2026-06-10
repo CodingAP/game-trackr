@@ -1,7 +1,7 @@
 import type { EditorTabId } from '../types/index.js';
 import { icon } from './icons.js';
 
-export const EDITOR_TAB_HELP: Record<EditorTabId, string> = {
+const EDITOR_TAB_HELP: Record<EditorTabId, string> = {
   content: `
     <p><strong>Pages</strong> — Use the sidebar to switch journal pages. Click to edit; double-click a name to rename.</p>
     <p><strong>Writing</strong> — Use the toolbar for headings, formatting, checkboxes, progress bars, and media. Changes autosave.</p>

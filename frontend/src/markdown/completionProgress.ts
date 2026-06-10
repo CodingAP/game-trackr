@@ -1,4 +1,4 @@
-import type { CompletionTag, ManagedCheckbox } from '../types/index.js';
+import type { ManagedCheckbox, ProgressBar } from '../types/index.js';
 import type { CheckboxItem } from './checkboxes.js';
 import {
   buildCheckboxIndex,
@@ -21,7 +21,6 @@ export interface ProgressStats {
 }
 
 export const TAG_PROGRESS_MARKER = /\[\[(?:pb|tag-progress):([^\]]+)\]\]/g;
-export const PROGRESS_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function slugifyProgressBarId(label: string, existing: Set<string>): string {
   return slugifyCheckboxId(label.trim() || 'progress bar', existing);
@@ -39,16 +38,19 @@ export function replaceProgressMarkerReference(
   });
 }
 
-export function resolveTag(tags: CompletionTag[], reference: string): CompletionTag | undefined {
+export function resolveProgressBar(
+  bars: ProgressBar[],
+  reference: string,
+): ProgressBar | undefined {
   const trimmed = reference.trim();
   return (
-    tags.find((tag) => tag.id === trimmed) ??
-    tags.find((tag) => tag.name.toLowerCase() === trimmed.toLowerCase())
+    bars.find((bar) => bar.id === trimmed) ??
+    bars.find((bar) => bar.name.toLowerCase() === trimmed.toLowerCase())
   );
 }
 
 export function computeTagProgress(
-  tag: CompletionTag,
+  tag: ProgressBar,
   checkedItems: Record<string, boolean>,
   checkboxes: CheckboxItem[],
   managed?: ManagedCheckbox[],
@@ -117,19 +119,19 @@ export function renderProgressBarHtml(
 
 export function renderCompletionSummaryHtml(
   gameSlug: string,
-  tags: CompletionTag[],
+  bars: ProgressBar[],
   checkboxes: CheckboxItem[],
   checkedItems: Record<string, boolean>,
   managed?: ManagedCheckbox[],
 ): string {
   const overall = computeOverallProgress(checkboxes, checkedItems);
-  const summaryTags = tags.filter((tag) => tag.showInSummary && tag.name.trim());
+  const summaryBars = bars.filter((bar) => bar.showInSummary && bar.name.trim());
   const progressCheckboxes = getProgressCheckboxes(checkboxes);
 
-  const tagBars = summaryTags
-    .map((tag) => {
-      const stats = computeTagProgress(tag, checkedItems, checkboxes, managed);
-      return renderProgressBarHtml(tag.name, stats, { tagId: tag.id, compact: true });
+  const summaryBarHtml = summaryBars
+    .map((bar) => {
+      const stats = computeTagProgress(bar, checkedItems, checkboxes, managed);
+      return renderProgressBarHtml(bar.name, stats, { tagId: bar.id, compact: true });
     })
     .join('');
 
@@ -144,8 +146,8 @@ export function renderCompletionSummaryHtml(
         : ''
     }
     ${
-      summaryTags.length > 0
-        ? `<div class="completion-summary-tags">${tagBars}</div>`
+      summaryBars.length > 0
+        ? `<div class="completion-summary-tags">${summaryBarHtml}</div>`
         : ''
     }
     ${renderPlaytimeSectionHtml(getPlaytime(gameSlug).entries)}
@@ -168,21 +170,21 @@ export function preprocessTagProgressMarkdown(content: string): string {
 
 export function mountTagProgressBlocks(
   container: HTMLElement,
-  tags: CompletionTag[],
+  bars: ProgressBar[],
   checkboxes: CheckboxItem[],
   checkedItems: Record<string, boolean>,
   managed?: ManagedCheckbox[],
 ): void {
   container.querySelectorAll('.tag-progress[data-tag-ref]').forEach((element) => {
     const ref = decodeURIComponent(element.getAttribute('data-tag-ref') ?? '');
-    const tag = resolveTag(tags, ref);
-    if (!tag) {
+    const bar = resolveProgressBar(bars, ref);
+    if (!bar) {
       element.outerHTML = `<p class="tag-progress-unknown text-muted text-sm">Unknown progress bar: ${escapeHtml(ref)}</p>`;
       return;
     }
 
-    const stats = computeTagProgress(tag, checkedItems, checkboxes, managed);
-    element.outerHTML = renderProgressBarHtml(tag.name, stats, { tagId: tag.id });
+    const stats = computeTagProgress(bar, checkedItems, checkboxes, managed);
+    element.outerHTML = renderProgressBarHtml(bar.name, stats, { tagId: bar.id });
   });
 }
 
@@ -204,7 +206,7 @@ export function updateProgressBarElement(
 
 export function refreshProgressUi(
   root: HTMLElement,
-  tags: CompletionTag[],
+  bars: ProgressBar[],
   checkboxes: CheckboxItem[],
   checkedItems: Record<string, boolean>,
   managed?: ManagedCheckbox[],
@@ -215,18 +217,14 @@ export function refreshProgressUi(
     updateProgressBarElement(overallBlock as HTMLElement, 'Overall completion', overall);
   }
 
-  tags.forEach((tag) => {
-    const stats = computeTagProgress(tag, checkedItems, checkboxes, managed);
-    root.querySelectorAll(`[data-tag-id="${tag.id}"]`).forEach((element) => {
-      updateProgressBarElement(element as HTMLElement, tag.name, stats);
+  bars.forEach((bar) => {
+    const stats = computeTagProgress(bar, checkedItems, checkboxes, managed);
+    root.querySelectorAll(`[data-tag-id="${bar.id}"]`).forEach((element) => {
+      updateProgressBarElement(element as HTMLElement, bar.name, stats);
     });
   });
 }
 
-export function buildCheckboxItemsFromManaged(managed: ManagedCheckbox[]): CheckboxItem[] {
-  return managedToCheckboxItems(managed);
-}
-
-export function buildTagProgressMarker(tag: CompletionTag): string {
-  return `[[pb:${tag.id}]]`;
+export function buildProgressBarMarker(bar: ProgressBar): string {
+  return `[[pb:${bar.id}]]`;
 }

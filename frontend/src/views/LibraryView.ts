@@ -3,9 +3,9 @@ import { renderImportGameControls, wireImportGameButton } from '../components/Im
 import { renderCollapsiblePanel, wireCollapsiblePanels } from '../components/CollapsiblePanel.js';
 import { renderLibraryMobyHtml } from '../components/GameInfoPanel.js';
 import { getProgressCheckboxes, isCheckboxComplete, buildCheckboxIndex } from '../markdown/checkboxes.js';
+import { managedToCheckboxItems } from '../markdown/managedCheckboxes.js';
 import { isLocallyAuthenticated } from '../storage/auth.js';
 import { getProgress } from '../storage/progress.js';
-import { buildCheckboxItemsForProgress } from '../utils/journalBundle.js';
 import { navigate } from '../router.js';
 import { iconLabel } from '../components/icons.js';
 
@@ -85,7 +85,7 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
 
         if (checkboxesResult.status === 'fulfilled') {
           try {
-            const checkboxes = buildCheckboxItemsForProgress(checkboxesResult.value);
+            const checkboxes = managedToCheckboxItems(checkboxesResult.value.checkboxes);
             const progressCheckboxes = getProgressCheckboxes(checkboxes);
             const progress = getProgress(game.slug);
             const index = buildCheckboxIndex(checkboxes);

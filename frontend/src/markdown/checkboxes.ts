@@ -40,10 +40,6 @@ export function getProgressCheckboxes(items: CheckboxItem[]): CheckboxItem[] {
   return items.filter((item) => item.countsTowardProgress);
 }
 
-export function isLeafCheckbox(item: CheckboxItem): boolean {
-  return item.childIds.length === 0;
-}
-
 export function collectDescendantLeaves(
   id: string,
   index: Map<string, CheckboxItem>,

@@ -18,7 +18,7 @@ import {
   lineNumbers,
   type ViewUpdate,
 } from '@codemirror/view';
-import { resolveTag } from '../markdown/completionProgress.js';
+import { resolveProgressBar, TAG_PROGRESS_MARKER } from '../markdown/completionProgress.js';
 import { resolveMap } from '../markdown/gameMaps.js';
 import { parseImageEmbedRaw } from '../markdown/imageDocument.js';
 import { parseViewportTitle } from '../markdown/images.js';
@@ -27,11 +27,11 @@ import {
   getIndentDepth,
   parseCheckboxLine,
 } from '../markdown/managedCheckboxes.js';
-import type { CompletionTag, GameMap, ManagedCheckbox } from '../types/index.js';
+import type { GameMap, ManagedCheckbox, ProgressBar } from '../types/index.js';
 
 export interface MarkdownEmbedContext {
   checkboxes: ManagedCheckbox[];
-  tags: CompletionTag[];
+  progressBars: ProgressBar[];
   maps: GameMap[];
 }
 
@@ -80,7 +80,6 @@ interface EmbedMatch {
 
 const CHECKBOX_NEST_INDENT_REM = 1.5;
 
-const PROGRESS_MARKER = /\[\[(?:pb|tag-progress):([^\]]+)\]\]/g;
 const MAP_MARKER = /\[\[map:([^\]]+)\]\]/g;
 const IMAGE_MARKER = /!\[([^\]]*)\]\(([^\s)]+)(?:\s+"([^"]*)")?\)/g;
 const FIGURE_BLOCK =
@@ -450,19 +449,19 @@ function findEmbeds(doc: string, context: MarkdownEmbedContext): EmbedMatch[] {
   const matches = findCheckboxLineEmbeds(doc, context);
   const occupied = matches.map((entry) => ({ start: entry.from, end: entry.to }));
 
-  for (const match of doc.matchAll(PROGRESS_MARKER)) {
+  for (const match of doc.matchAll(TAG_PROGRESS_MARKER)) {
     const from = match.index ?? 0;
     if (overlapsRange(from, occupied)) continue;
     const ref = match[1].trim();
-    const tag = resolveTag(context.tags, ref);
-    const tagName = tag?.name.trim() || ref;
+    const bar = resolveProgressBar(context.progressBars, ref);
+    const barName = bar?.name.trim() || ref;
     matches.push({
       from: match.index ?? 0,
       to: (match.index ?? 0) + match[0].length,
       kind: 'progress',
-      label: tagName,
-      missing: !tag,
-      title: tag ? `Progress bar: ${tagName}` : `Unknown progress bar: ${ref}`,
+      label: barName,
+      missing: !bar,
+      title: bar ? `Progress bar: ${barName}` : `Unknown progress bar: ${ref}`,
       reference: ref,
     });
   }
@@ -735,7 +734,7 @@ export function buildInitialEmbedFoldEffects(state: EditorState): StateEffect<un
 
 export const emptyMarkdownEmbedContext: MarkdownEmbedContext = {
   checkboxes: [],
-  tags: [],
+  progressBars: [],
   maps: [],
 };
 

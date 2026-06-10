@@ -1,12 +1,10 @@
 import { buildMapMarker } from '../markdown/gameMaps.js';
-import {
-  buildTagProgressMarker,
-  resolveTag,
-  slugifyProgressBarId,
-} from '../markdown/completionProgress.js';
+import { buildProgressBarMarker, resolveProgressBar } from '../markdown/completionProgress.js';
+import { upsertProgressBarByName } from '../markdown/progressBars.js';
 import {
   buildCheckboxLine,
   formatManagedCheckboxLabel,
+  SLUG_ID_PATTERN,
   slugifyCheckboxId,
 } from '../markdown/managedCheckboxes.js';
 import {
@@ -25,11 +23,9 @@ import {
 import { getLibraryEntry, type ImageLibraryData } from '../markdown/imageLibrary.js';
 import type { EmbedApplyFn, EmbedEditTarget } from './markdownEmbedExtension.js';
 import type { MarkdownEmbedContext } from './markdownEmbedExtension.js';
-import type { CompletionTag, ManagedCheckbox } from '../types/index.js';
+import type { ManagedCheckbox } from '../types/index.js';
 import { renderListSearchBar, wireListSearch } from './listSearch.js';
 import { icon, iconLabel } from './icons.js';
-
-const CHECKBOX_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function escapeHtml(value: string): string {
   return value
@@ -223,8 +219,8 @@ export function openEmbedEditPopover(options: {
   onApply: EmbedApplyFn;
   onRegisterCheckbox?: (checkbox: ManagedCheckbox) => void;
   onUpdateCheckbox?: (id: string, updates: { id?: string; label?: string }) => boolean;
-  onRegisterTag?: (tag: CompletionTag) => void;
-  onUpdateTag?: (id: string, updates: { name: string }) => void;
+  onRegisterProgressBar?: (bar: import('../types/index.js').ProgressBar) => void;
+  onUpdateProgressBar?: (id: string, updates: { name: string }) => void;
   onContextChanged?: () => void;
 }): () => void {
   const { anchor, target, context, onApply } = options;
@@ -241,8 +237,8 @@ export function openEmbedEditPopover(options: {
     body = renderEditCheckboxForm(target, context);
   } else if (target.kind === 'progress') {
     title = 'Edit progress bar';
-    const resolvedTag = resolveTag(context.tags, target.reference);
-    body = renderProgressEditForm(resolvedTag?.name ?? target.reference);
+    const resolvedBar = resolveProgressBar(context.progressBars, target.reference);
+    body = renderProgressEditForm(resolvedBar?.name ?? target.reference);
   } else if (target.kind === 'map') {
     title = 'Change map';
     const items = context.maps.map((map) => ({
@@ -360,7 +356,7 @@ export function openEmbedEditPopover(options: {
     const newId = idInput?.value.trim() ?? '';
     if (!label || !newId) return;
 
-    if (!CHECKBOX_ID_PATTERN.test(newId)) {
+    if (!SLUG_ID_PATTERN.test(newId)) {
       showCheckboxError('Checkbox id must use lowercase letters, numbers, and hyphens.', 'edit-checkbox-error');
       idInput?.focus();
       return;
@@ -393,7 +389,7 @@ export function openEmbedEditPopover(options: {
     close();
   });
 
-  let linkedProgressTagId = resolveTag(context.tags, target.reference)?.id ?? null;
+  let linkedProgressBarId = resolveProgressBar(context.progressBars, target.reference)?.id ?? null;
 
   const applyProgressName = () => {
     if (target.kind !== 'progress') return;
@@ -402,30 +398,18 @@ export function openEmbedEditPopover(options: {
     const trimmed = nameInput?.value.trim() ?? '';
     if (!trimmed) return;
 
-    const existing = context.tags.find(
-      (tag) => tag.name.trim().toLowerCase() === trimmed.toLowerCase(),
-    );
+    const bar = upsertProgressBarByName(trimmed, context.progressBars, linkedProgressBarId, {
+      onRegister: (entry) => {
+        linkedProgressBarId = entry.id;
+        options.onRegisterProgressBar?.(entry);
+      },
+      onUpdate: options.onUpdateProgressBar,
+    });
+    if (!bar) return;
 
-    let tagId = linkedProgressTagId;
-    if (existing) {
-      tagId = existing.id;
-      linkedProgressTagId = existing.id;
-    } else if (tagId) {
-      options.onUpdateTag?.(tagId, { name: trimmed });
-    } else {
-      const existingIds = new Set(context.tags.map((tag) => tag.id));
-      const tag: CompletionTag = {
-        id: slugifyProgressBarId(trimmed, existingIds),
-        name: trimmed,
-        showInSummary: false,
-      };
-      tagId = tag.id;
-      linkedProgressTagId = tag.id;
-      options.onRegisterTag?.(tag);
-    }
-
-    if (tagId && target.reference !== tagId) {
-      onApply(buildTagProgressMarker({ id: tagId, name: trimmed }));
+    linkedProgressBarId = bar.id;
+    if (target.reference !== bar.id) {
+      onApply(buildProgressBarMarker(bar));
     }
 
     options.onContextChanged?.();

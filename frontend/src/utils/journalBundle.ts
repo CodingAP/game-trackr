@@ -1,6 +1,6 @@
 import type {
   CheckboxConnectionsData,
-  CompletionTagsData,
+  ProgressBarsData,
   FullJournalData,
   GameMapsData,
   ImageLibraryData,
@@ -22,7 +22,7 @@ export interface ImportDraft {
   content?: string;
   journal?: FullJournalData;
   checkboxes?: CheckboxConnectionsData;
-  completionTags?: CompletionTagsData;
+  completionTags?: ProgressBarsData;
   maps?: GameMapsData;
 }
 
@@ -74,7 +74,7 @@ export async function buildJournalExportBundle(
   name: string,
   journal: FullJournalData,
   checkboxes: CheckboxConnectionsData,
-  completionTags: CompletionTagsData,
+  completionTags: ProgressBarsData,
   maps: GameMapsData,
   imageLibrary: ImageLibraryData,
   uploadedImages: UploadedImage[],
@@ -114,7 +114,7 @@ export async function buildJournalExportBundle(
 export function migrateV1BundleToV2(bundle: JournalExportBundleV1): {
   journal: FullJournalData;
   checkboxes: CheckboxConnectionsData;
-  completionTags: CompletionTagsData;
+  completionTags: ProgressBarsData;
 } {
   const legacyItems = extractCheckboxes(bundle.content);
   const tagIdsByCheckboxId = new Map<string, string[]>();
@@ -142,7 +142,7 @@ export function migrateV1BundleToV2(bundle: JournalExportBundleV1): {
     contents: { [DEFAULT_MAIN_PAGE_ID]: bundle.content },
   };
 
-  const completionTags: CompletionTagsData = {
+  const completionTags: ProgressBarsData = {
     tags: bundle.completionTags.tags.map(({ id, name, showInSummary }) => ({
       id,
       name,
@@ -185,7 +185,7 @@ export function isJournalExportBundleV1(value: unknown): value is JournalExportB
     typeof record.slug === 'string' &&
     record.completionTags !== null &&
     typeof record.completionTags === 'object' &&
-    Array.isArray((record.completionTags as CompletionTagsData).tags) &&
+    Array.isArray((record.completionTags as ProgressBarsData).tags) &&
     Array.isArray(record.images)
   );
 }
@@ -205,7 +205,7 @@ export function isJournalExportBundle(value: unknown): value is JournalExportBun
     Array.isArray((record.checkboxes as CheckboxConnectionsData).checkboxes) &&
     record.completionTags !== null &&
     typeof record.completionTags === 'object' &&
-    Array.isArray((record.completionTags as CompletionTagsData).tags) &&
+    Array.isArray((record.completionTags as ProgressBarsData).tags) &&
     Array.isArray(record.images)
   );
 }
@@ -255,8 +255,3 @@ export async function parseImportFile(file: File): Promise<ParsedImportFile> {
   };
 }
 
-export function buildCheckboxItemsForProgress(
-  checkboxes: CheckboxConnectionsData,
-): ReturnType<typeof managedToCheckboxItems> {
-  return managedToCheckboxItems(checkboxes.checkboxes);
-}

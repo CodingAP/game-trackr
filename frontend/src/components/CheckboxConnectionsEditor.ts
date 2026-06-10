@@ -8,8 +8,8 @@ import {
 import { icon, iconLabel } from './icons.js';
 import type {
   CheckboxConnectionsData,
-  CompletionTag,
-  CompletionTagsData,
+  ProgressBar,
+  ProgressBarsData,
   FullJournalData,
   ManagedCheckbox,
 } from '../types/index.js';
@@ -26,7 +26,7 @@ function escapeHtml(value: string): string {
 function renderCheckboxPanelTitle(
   checkbox: ManagedCheckbox,
   checkboxes: ManagedCheckbox[],
-  tags: CompletionTag[],
+  progressBars: ProgressBar[],
 ): string {
   const label = escapeHtml(checkbox.label.trim() || checkbox.id || 'Untitled checkbox');
   const parent = checkbox.parentId
@@ -35,18 +35,18 @@ function renderCheckboxPanelTitle(
   const parentText = parent
     ? escapeHtml(parent.label.trim() || parent.id)
     : 'Top-level';
-  const assignedTags = tags.filter((tag) => checkbox.tagIds.includes(tag.id));
-  const tagText =
-    assignedTags.length > 0
-      ? assignedTags
-          .map((tag) => escapeHtml(tag.name.trim() || 'Untitled progress bar'))
+  const assignedBars = progressBars.filter((bar) => checkbox.tagIds.includes(bar.id));
+  const barText =
+    assignedBars.length > 0
+      ? assignedBars
+          .map((bar) => escapeHtml(bar.name.trim() || 'Untitled progress bar'))
           .join(', ')
       : 'None';
 
   return `
     <span class="checkbox-panel-title">
       <span class="checkbox-panel-title-main">${parentText} -&gt; ${label}</span>
-      <span class="checkbox-panel-title-tags">(Progress bars: ${tagText})</span>
+      <span class="checkbox-panel-title-tags">(Progress bars: ${barText})</span>
     </span>
   `;
 }
@@ -54,28 +54,28 @@ function renderCheckboxPanelTitle(
 function buildCheckboxSearchText(
   checkbox: ManagedCheckbox,
   checkboxes: ManagedCheckbox[],
-  tags: CompletionTag[],
+  progressBars: ProgressBar[],
 ): string {
   const parent = checkbox.parentId
     ? checkboxes.find((entry) => entry.id === checkbox.parentId)
     : null;
-  const tagNames = tags
-    .filter((tag) => checkbox.tagIds.includes(tag.id))
-    .map((tag) => tag.name.trim() || tag.id);
+  const barNames = progressBars
+    .filter((bar) => checkbox.tagIds.includes(bar.id))
+    .map((bar) => bar.name.trim() || bar.id);
   return [
     checkbox.id,
     checkbox.label,
     parent?.label,
     parent?.id,
-    ...tagNames,
+    ...barNames,
   ]
     .filter(Boolean)
     .join(' ');
 }
 
-function renderTagSection(checkbox: ManagedCheckbox, tags: CompletionTag[]): string {
-  const assigned = tags.filter((tag) => checkbox.tagIds.includes(tag.id));
-  const available = tags.filter((tag) => !checkbox.tagIds.includes(tag.id));
+function renderProgressBarSection(checkbox: ManagedCheckbox, progressBars: ProgressBar[]): string {
+  const assigned = progressBars.filter((bar) => checkbox.tagIds.includes(bar.id));
+  const available = progressBars.filter((bar) => !checkbox.tagIds.includes(bar.id));
 
   return `
     <div class="checkbox-editor-tags mb-3">
@@ -136,7 +136,7 @@ export function mountCheckboxConnectionsEditor(
   host: HTMLElement,
   editor: MarkdownEditorHandle,
   initial: CheckboxConnectionsData,
-  getTags: () => CompletionTagsData,
+  getProgressBars: () => ProgressBarsData,
   options: CheckboxConnectionsEditorOptions = {},
 ): {
   getData: () => CheckboxConnectionsData;
@@ -213,7 +213,7 @@ export function mountCheckboxConnectionsEditor(
 
   const render = () => {
     syncFromDom();
-    const tags = getTags().tags;
+    const progressBars = getProgressBars().tags;
 
     host.innerHTML = `
       ${checkboxes.length > 0 ? renderListSearchBar({ id: 'checkbox-search', placeholder: 'Search checkboxes...' }) : ''}
@@ -225,7 +225,7 @@ export function mountCheckboxConnectionsEditor(
                 .map((checkbox) => {
                   const parentOptions = checkboxes.filter((entry) => entry.id !== checkbox.id);
                   const title = checkbox.label.trim() || checkbox.id || 'Untitled checkbox';
-                  const titleHtml = renderCheckboxPanelTitle(checkbox, checkboxes, tags);
+                  const titleHtml = renderCheckboxPanelTitle(checkbox, checkboxes, progressBars);
 
                   const body = `
                     <div class="grid gap-3 sm:grid-cols-2 mb-3">
@@ -261,7 +261,7 @@ export function mountCheckboxConnectionsEditor(
                         </select>
                       </label>
                     </div>
-                    ${renderTagSection(checkbox, tags)}
+                    ${renderProgressBarSection(checkbox, progressBars)}
                   `;
 
                   const titleActions = `
@@ -281,7 +281,7 @@ export function mountCheckboxConnectionsEditor(
                     defaultOpen: expandedCheckboxes.has(checkbox.id),
                     attributes: {
                       'checkbox-id': checkbox.id,
-                      'search-text': buildCheckboxSearchText(checkbox, checkboxes, tags),
+                      'search-text': buildCheckboxSearchText(checkbox, checkboxes, progressBars),
                     },
                     content: body,
                   });

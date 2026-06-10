@@ -1,13 +1,13 @@
-import { slugifyProgressBarId } from '../markdown/completionProgress.js';
+import { upsertProgressBarByName } from '../markdown/progressBars.js';
 import { icon, iconLabel } from './icons.js';
-import type { CompletionTag } from '../types/index.js';
+import type { ProgressBar } from '../types/index.js';
 
 export function openProgressInsertDialog(options: {
-  tags: CompletionTag[];
-  getTags?: () => CompletionTag[];
-  onCommitTag?: (tag: CompletionTag | null) => void;
-  onRegisterTag?: (tag: CompletionTag) => void;
-  onUpdateTag?: (id: string, updates: { name: string }) => void;
+  progressBars: ProgressBar[];
+  getProgressBars?: () => ProgressBar[];
+  onCommitProgressBar?: (bar: ProgressBar | null) => void;
+  onRegisterProgressBar?: (bar: ProgressBar) => void;
+  onUpdateProgressBar?: (id: string, updates: { name: string }) => void;
 }): void {
   const overlay = document.createElement('div');
   overlay.className = 'auth-overlay progress-insert-overlay';
@@ -21,7 +21,7 @@ export function openProgressInsertDialog(options: {
       <div id="progress-insert-form" class="space-y-3">
         <label class="block">
           <span class="label">Progress bar name</span>
-          <input type="text" id="progress-tag-name" class="input" placeholder="e.g. Complete World 1" />
+          <input type="text" id="progress-bar-name" class="input" placeholder="e.g. Complete World 1" />
         </label>
         <div class="flex flex-wrap gap-2">
           <button type="button" class="btn-secondary" data-action="close">${iconLabel('close', 'Done')}</button>
@@ -30,8 +30,8 @@ export function openProgressInsertDialog(options: {
     </div>
   `;
 
-  const nameInput = overlay.querySelector('#progress-tag-name') as HTMLInputElement;
-  let linkedTagId: string | null = null;
+  const nameInput = overlay.querySelector('#progress-bar-name') as HTMLInputElement;
+  let linkedBarId: string | null = null;
 
   const close = () => {
     commitName();
@@ -44,44 +44,22 @@ export function openProgressInsertDialog(options: {
   };
 
   const commitName = () => {
-    const trimmed = nameInput.value.trim();
-    if (!trimmed) {
-      options.onCommitTag?.(null);
+    const bars = options.getProgressBars?.() ?? options.progressBars;
+    const bar = upsertProgressBarByName(nameInput.value, bars, linkedBarId, {
+      onRegister: (entry) => {
+        linkedBarId = entry.id;
+        options.onRegisterProgressBar?.(entry);
+      },
+      onUpdate: options.onUpdateProgressBar,
+    });
+
+    if (!bar) {
+      options.onCommitProgressBar?.(null);
       return;
     }
 
-    const tags = options.getTags?.() ?? options.tags;
-    const existingIds = new Set(tags.map((tag) => tag.id));
-    const existing = tags.find(
-      (tag) => tag.name.trim().toLowerCase() === trimmed.toLowerCase(),
-    );
-
-    let tag: CompletionTag;
-    if (existing) {
-      linkedTagId = existing.id;
-      tag = existing;
-      if (existing.name.trim() !== trimmed) {
-        options.onUpdateTag?.(existing.id, { name: trimmed });
-        tag = { ...existing, name: trimmed };
-      }
-    } else if (linkedTagId) {
-      options.onUpdateTag?.(linkedTagId, { name: trimmed });
-      tag = {
-        id: linkedTagId,
-        name: trimmed,
-        showInSummary: false,
-      };
-    } else {
-      tag = {
-        id: slugifyProgressBarId(trimmed, existingIds),
-        name: trimmed,
-        showInSummary: false,
-      };
-      linkedTagId = tag.id;
-      options.onRegisterTag?.(tag);
-    }
-
-    options.onCommitTag?.(tag);
+    linkedBarId = bar.id;
+    options.onCommitProgressBar?.(bar);
   };
 
   overlay.querySelectorAll('[data-action="close"]').forEach((button) => {

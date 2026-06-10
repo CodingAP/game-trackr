@@ -1,4 +1,4 @@
-export interface CompletionTag {
+export interface ProgressBar {
   id: string;
   name: string;
   showInSummary?: boolean;
@@ -6,8 +6,8 @@ export interface CompletionTag {
   checkboxIds?: string[];
 }
 
-export interface CompletionTagsData {
-  tags: CompletionTag[];
+export interface ProgressBarsData {
+  tags: ProgressBar[];
 }
 
 export interface JournalPage {
@@ -27,10 +27,6 @@ export interface ManagedCheckbox {
   label: string;
   parentId: string | null;
   tagIds: string[];
-}
-
-export interface CheckboxConnectionsData {
-  checkboxes: ManagedCheckbox[];
 }
 
 export interface CheckboxConnectionsData {
@@ -80,7 +76,7 @@ export interface GameMapsData {
 export interface EditorStateBody {
   journal: FullJournalData;
   checkboxes: CheckboxConnectionsData;
-  completionTags: CompletionTagsData;
+  completionTags: ProgressBarsData;
   maps: GameMapsData;
   imageLibrary: ImageLibraryData;
 }
@@ -240,7 +236,7 @@ export interface JournalExportBundleV1 {
   name: string;
   slug: string;
   content: string;
-  completionTags: CompletionTagsData;
+  completionTags: ProgressBarsData;
   images: JournalExportImage[];
 }
 
@@ -251,7 +247,7 @@ export interface JournalExportBundle {
   slug: string;
   journal: FullJournalData;
   checkboxes: CheckboxConnectionsData;
-  completionTags: CompletionTagsData;
+  completionTags: ProgressBarsData;
   maps?: GameMapsData;
   imageLibrary?: ImageLibraryData;
   images: JournalExportImage[];
@@ -263,7 +259,7 @@ export interface ImportGameRequest {
   sourceSlug?: string;
   journal: FullJournalData;
   checkboxes: CheckboxConnectionsData;
-  completionTags: CompletionTagsData;
+  completionTags: ProgressBarsData;
   maps?: GameMapsData;
   imageLibrary?: ImageLibraryData;
   images: JournalExportImage[];

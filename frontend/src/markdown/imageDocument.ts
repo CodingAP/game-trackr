@@ -109,16 +109,6 @@ export function countDocumentImagesByUrl(
   );
 }
 
-export function appendDocumentImage(
-  content: string,
-  options: ImageSnippetOptions,
-): string {
-  const snippet = buildImageSnippet(options);
-  const trimmed = content.trimEnd();
-  const prefix = trimmed.length === 0 ? '' : '\n\n';
-  return `${trimmed}${prefix}${snippet}`;
-}
-
 export function propagateImageMetadataInContent(
   content: string,
   url: string,
@@ -286,20 +276,3 @@ export function parseImageEmbedRaw(raw: string): ImageSnippetOptions | null {
   };
 }
 
-export function readImageFormOptions(form: HTMLElement, url: string): ImageSnippetOptions {
-  const alt = (form.querySelector('[data-field="alt"]') as HTMLInputElement).value.trim() || 'image';
-  const width = Number((form.querySelector('[data-field="width"]') as HTMLInputElement).value);
-  const height = Number((form.querySelector('[data-field="height"]') as HTMLInputElement).value);
-  const scaleToFit = (form.querySelector('[data-field="scale"]') as HTMLInputElement).checked;
-  const sourceLabel = (form.querySelector('[data-field="source-label"]') as HTMLInputElement).value.trim();
-  const sourceUrl = (form.querySelector('[data-field="source-url"]') as HTMLInputElement).value.trim();
-
-  const hasViewport = Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
-
-  return {
-    alt,
-    url,
-    viewport: hasViewport ? { width, height, scaleToFit } : undefined,
-    source: sourceLabel && sourceUrl ? { label: sourceLabel, url: sourceUrl } : undefined,
-  };
-}

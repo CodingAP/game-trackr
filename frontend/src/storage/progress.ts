@@ -42,13 +42,6 @@ export function saveProgress(progress: UserProgress): void {
   writeAll(all);
 }
 
-export function toggleCheckbox(gameSlug: string, itemId: string, checked: boolean): UserProgress {
-  const progress = getProgress(gameSlug);
-  progress.checkedItems[itemId] = checked;
-  saveProgress(progress);
-  return progress;
-}
-
 export function setCheckboxStates(
   gameSlug: string,
   updates: Record<string, boolean>,
@@ -59,16 +52,4 @@ export function setCheckboxStates(
   }
   saveProgress(progress);
   return progress;
-}
-
-export function getCompletionStats(gameSlug: string, totalCheckboxes: number): {
-  completed: number;
-  total: number;
-  percent: number;
-} {
-  const progress = getProgress(gameSlug);
-  const completed = Object.values(progress.checkedItems).filter(Boolean).length;
-  const total = totalCheckboxes;
-  const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
-  return { completed, total, percent };
 }

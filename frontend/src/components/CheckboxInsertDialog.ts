@@ -1,13 +1,12 @@
 import {
   buildCheckboxMarker,
   formatManagedCheckboxLabel,
+  SLUG_ID_PATTERN,
   slugifyCheckboxId,
 } from '../markdown/managedCheckboxes.js';
 import { renderListSearchBar, wireListSearch } from './listSearch.js';
 import { icon, iconLabel } from './icons.js';
 import type { ManagedCheckbox } from '../types/index.js';
-
-const CHECKBOX_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function escapeHtml(value: string): string {
   return value
@@ -154,7 +153,7 @@ export function openCheckboxInsertDialog(options: {
     const id = idInput.value.trim();
     if (!label || !id) return;
 
-    if (!CHECKBOX_ID_PATTERN.test(id)) {
+    if (!SLUG_ID_PATTERN.test(id)) {
       showError('Checkbox id must use lowercase letters, numbers, and hyphens.');
       idInput.focus();
       return;

@@ -1,18 +1,8 @@
-import type { ImageSourceLink } from './images.js';
 import { defaultMediaAlt } from './media.js';
-import type { UploadedImage } from '../types/index.js';
+import type { ImageLibraryData, ImageLibraryEntry, UploadedImage } from '../types/index.js';
 import { findDocumentImageByUrlInPages } from './imageDocument.js';
 
-export interface ImageLibraryEntry {
-  url: string;
-  filename: string;
-  alt: string;
-  source?: ImageSourceLink;
-}
-
-export interface ImageLibraryData {
-  images: ImageLibraryEntry[];
-}
+export type { ImageLibraryData, ImageLibraryEntry } from '../types/index.js';
 
 export function getLibraryEntry(
   library: ImageLibraryData,

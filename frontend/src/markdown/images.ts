@@ -287,30 +287,6 @@ export function applyMediaViewports(
   });
 }
 
-export function updateDefaultImageViewports(
-  container: HTMLElement,
-  globalSettings: ImageViewportSettings,
-): void {
-  container.querySelectorAll('img').forEach((img) => {
-    const viewport = img.closest('.image-viewport') as HTMLElement | null;
-    if (viewport?.dataset.customViewport === 'true') return;
-
-    resetViewport(viewport ?? createViewportFor(img), img);
-
-    if (globalSettings.enabled) {
-      applyCustomViewport(
-        viewport ?? (img.closest('.image-viewport') as HTMLElement),
-        img,
-        globalSettings.width,
-        globalSettings.height,
-        globalSettings.scaleToFit,
-      );
-    } else {
-      applyNaturalViewport(viewport ?? (img.closest('.image-viewport') as HTMLElement), img);
-    }
-  });
-}
-
 function renderSourceCaption(content: string): HTMLElement {
   const caption = document.createElement('figcaption');
   caption.className = 'image-source';

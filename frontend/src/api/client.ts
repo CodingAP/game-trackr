@@ -8,7 +8,7 @@ import type {
   AuthSession,
   AuthStatus,
   CheckboxConnectionsData,
-  CompletionTagsData,
+  ProgressBarsData,
   EditorStateBody,
   FullJournalData,
   GameMapsData,
@@ -278,13 +278,13 @@ export async function deleteGameImage(slug: string, filename: string): Promise<v
   }
 }
 
-export async function fetchCompletionTags(slug: string): Promise<CompletionTagsData> {
-  return request<CompletionTagsData>(`/api/games/${slug}/completion-tags`);
+export async function fetchProgressBars(slug: string): Promise<ProgressBarsData> {
+  return request<ProgressBarsData>(`/api/games/${slug}/completion-tags`);
 }
 
-export async function saveCompletionTags(
+export async function saveProgressBars(
   slug: string,
-  data: CompletionTagsData,
+  data: ProgressBarsData,
 ): Promise<GameMeta> {
   return request<GameMeta>(
     `/api/games/${slug}/completion-tags`,
