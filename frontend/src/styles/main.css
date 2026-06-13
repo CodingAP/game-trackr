@@ -130,6 +130,134 @@
     --editor-cursor: 74 222 128;
   }
 
+  [data-theme='purple-dark'] {
+    --bg: 15 10 26;
+    --surface: 24 16 40;
+    --surface-muted: 18 12 32;
+    --border: 45 30 70;
+    --border-subtle: 65 45 95;
+    --text: 245 243 255;
+    --text-muted: 167 139 250;
+    --text-faint: 124 98 170;
+    --text-heading: 250 245 255;
+    --accent: 139 92 246;
+    --accent-hover: 167 139 250;
+    --accent-soft: 196 181 253;
+    --hover: 40 28 65;
+    --header-bg: 20 14 36;
+    --danger-border: 248 113 113;
+    --editor-bg: 18 12 32;
+    --editor-gutter-bg: 24 16 40;
+    --editor-gutter-text: 100 85 130;
+    --editor-line-active: 40 28 65;
+    --editor-selection: 139 92 246;
+    --editor-heading: 250 245 255;
+    --editor-strong: 245 243 255;
+    --editor-emphasis: 221 214 254;
+    --editor-link: 196 181 253;
+    --editor-meta: 124 98 170;
+    --editor-code-fg: 216 180 254;
+    --editor-code-bg: 45 30 70;
+    --editor-quote: 167 139 250;
+    --editor-cursor: 196 181 253;
+  }
+
+  [data-theme='purple-light'] {
+    --bg: 250 245 255;
+    --surface: 255 255 255;
+    --surface-muted: 243 232 255;
+    --border: 233 213 255;
+    --border-subtle: 216 180 254;
+    --text: 30 27 75;
+    --text-muted: 91 78 120;
+    --text-faint: 124 110 155;
+    --text-heading: 30 27 75;
+    --accent: 124 58 237;
+    --accent-hover: 109 40 217;
+    --accent-soft: 139 92 246;
+    --hover: 243 232 255;
+    --header-bg: 255 255 255;
+    --danger-border: 239 68 68;
+    --editor-bg: 255 255 255;
+    --editor-gutter-bg: 250 245 255;
+    --editor-gutter-text: 167 139 250;
+    --editor-line-active: 243 232 255;
+    --editor-selection: 124 58 237;
+    --editor-heading: 30 27 75;
+    --editor-strong: 46 16 101;
+    --editor-emphasis: 76 29 149;
+    --editor-link: 109 40 217;
+    --editor-meta: 124 110 155;
+    --editor-code-fg: 109 40 217;
+    --editor-code-bg: 243 232 255;
+    --editor-quote: 91 78 120;
+    --editor-cursor: 124 58 237;
+  }
+
+  [data-theme='red-dark'] {
+    --bg: 20 8 8;
+    --surface: 30 12 12;
+    --surface-muted: 22 8 8;
+    --border: 60 25 25;
+    --border-subtle: 82 35 35;
+    --text: 254 242 242;
+    --text-muted: 252 165 165;
+    --text-faint: 185 100 100;
+    --text-heading: 255 247 247;
+    --accent: 239 68 68;
+    --accent-hover: 248 113 113;
+    --accent-soft: 252 165 165;
+    --hover: 45 18 18;
+    --header-bg: 26 10 10;
+    --danger-border: 248 113 113;
+    --editor-bg: 22 8 8;
+    --editor-gutter-bg: 30 12 12;
+    --editor-gutter-text: 120 70 70;
+    --editor-line-active: 45 18 18;
+    --editor-selection: 239 68 68;
+    --editor-heading: 255 247 247;
+    --editor-strong: 254 242 242;
+    --editor-emphasis: 254 202 202;
+    --editor-link: 252 165 165;
+    --editor-meta: 185 100 100;
+    --editor-code-fg: 252 165 165;
+    --editor-code-bg: 60 25 25;
+    --editor-quote: 252 165 165;
+    --editor-cursor: 252 165 165;
+  }
+
+  [data-theme='red-light'] {
+    --bg: 255 241 242;
+    --surface: 255 255 255;
+    --surface-muted: 254 226 226;
+    --border: 254 202 202;
+    --border-subtle: 252 165 165;
+    --text: 69 10 10;
+    --text-muted: 127 29 29;
+    --text-faint: 153 55 55;
+    --text-heading: 69 10 10;
+    --accent: 220 38 38;
+    --accent-hover: 185 28 28;
+    --accent-soft: 239 68 68;
+    --hover: 254 226 226;
+    --header-bg: 255 255 255;
+    --danger-border: 239 68 68;
+    --editor-bg: 255 255 255;
+    --editor-gutter-bg: 255 241 242;
+    --editor-gutter-text: 252 165 165;
+    --editor-line-active: 254 226 226;
+    --editor-selection: 220 38 38;
+    --editor-heading: 69 10 10;
+    --editor-strong: 127 29 29;
+    --editor-emphasis: 153 27 27;
+    --editor-link: 185 28 28;
+    --editor-meta: 153 55 55;
+    --editor-code-fg: 185 28 28;
+    --editor-code-bg: 254 226 226;
+    --editor-quote: 127 29 29;
+    --editor-cursor: 220 38 38;
+  }
+
   html {
     @apply antialiased;
     -webkit-text-size-adjust: 100%;
@@ -174,7 +302,16 @@
   }
 
   .app-title-icon {
-    @apply h-8 w-8 shrink-0 rounded-lg object-cover;
+    @apply block h-8 w-8 shrink-0;
+    background-color: rgb(var(--accent));
+    mask-image: url('/favicon-mark.svg');
+    mask-size: contain;
+    mask-repeat: no-repeat;
+    mask-position: center;
+    -webkit-mask-image: url('/favicon-mark.svg');
+    -webkit-mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
   }
 
   .app-title-text {
@@ -2090,7 +2227,7 @@
   }
 
   .managed-checkbox-list {
-    @apply my-2 list-none space-y-1 p-0;
+    @apply my-3 list-none space-y-2 p-0;
   }
 
   .managed-checkbox {
@@ -2110,8 +2247,45 @@
   }
 
   .managed-checkbox label {
-    @apply inline-flex items-start gap-2 text-sm;
+    @apply flex w-full cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 text-sm transition-[border-color,background-color,box-shadow,color];
+    border-color: rgb(var(--border-subtle));
+    background-color: rgb(var(--surface-muted) / 0.35);
     color: rgb(var(--text));
+  }
+
+  .managed-checkbox label:hover {
+    border-color: rgb(var(--accent) / 0.3);
+    background-color: rgb(var(--surface-muted) / 0.55);
+  }
+
+  .managed-checkbox.is-unchecked label {
+    border-color: rgb(var(--border-subtle));
+    background-color: rgb(var(--surface-muted) / 0.45);
+    box-shadow: inset 3px 0 0 rgb(var(--text-faint) / 0.35);
+  }
+
+  .managed-checkbox.is-checked label {
+    border-color: rgb(var(--accent) / 0.45);
+    background-color: rgb(var(--accent) / 0.12);
+    box-shadow: inset 3px 0 0 rgb(var(--accent));
+    color: rgb(var(--text-heading));
+  }
+
+  .managed-checkbox.is-checked .managed-checkbox-text {
+    color: rgb(var(--text-muted));
+    text-decoration: line-through;
+    text-decoration-color: rgb(var(--accent-soft) / 0.65);
+  }
+
+  .managed-checkbox.is-indeterminate label {
+    border-color: rgb(var(--accent) / 0.35);
+    background-color: rgb(var(--accent) / 0.08);
+    box-shadow: inset 3px 0 0 rgb(var(--accent) / 0.55);
+    color: rgb(var(--text-heading));
+  }
+
+  .managed-checkbox-text {
+    @apply min-w-0 flex-1 leading-relaxed;
   }
 
   .managed-checkbox input[type='checkbox'] {

@@ -1,5 +1,6 @@
 import type { ImageViewportSettings, ThemeId } from '../types/index.js';
 import { THEME_OPTIONS } from '../types/index.js';
+import { applyFavicon } from '../utils/favicon.js';
 
 const IMAGE_STORAGE_KEY = 'game-tracking:image-viewport';
 const THEME_STORAGE_KEY = 'game-tracking:theme';
@@ -59,6 +60,7 @@ export function saveTheme(theme: ThemeId): ThemeId {
 
 export function applyTheme(theme: ThemeId): void {
   document.documentElement.dataset.theme = theme;
+  applyFavicon(theme);
 }
 
 export function initTheme(): void {

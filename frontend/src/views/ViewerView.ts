@@ -277,6 +277,16 @@ function wireCheckboxes(
         input.indeterminate =
           completedChildren > 0 && completedChildren < item.childIds.length;
       }
+
+      const row = input.closest('.managed-checkbox');
+      if (row) {
+        row.classList.toggle('is-checked', input.checked && !input.indeterminate);
+        row.classList.toggle('is-indeterminate', input.indeterminate);
+        row.classList.toggle(
+          'is-unchecked',
+          !input.checked && !input.indeterminate,
+        );
+      }
     });
   };
 

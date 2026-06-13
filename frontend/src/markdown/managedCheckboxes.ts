@@ -107,9 +107,9 @@ export function preprocessManagedCheckboxMarkdown(content: string): string {
     for (const item of block) {
       const label = item.label.trim() || item.id;
       output.push(
-        `<li class="managed-checkbox" data-cb-id="${escapeAttr(item.id)}" data-cb-depth="${item.depth}">` +
-          `<label><input type="checkbox" disabled data-cb-id="${escapeAttr(item.id)}" /> ` +
-          `${escapeHtml(label)}</label></li>`,
+        `<li class="managed-checkbox is-unchecked" data-cb-id="${escapeAttr(item.id)}" data-cb-depth="${item.depth}">` +
+          `<label><input type="checkbox" disabled data-cb-id="${escapeAttr(item.id)}" />` +
+          `<span class="managed-checkbox-text">${escapeHtml(label)}</span></label></li>`,
       );
     }
     output.push('</ul>');

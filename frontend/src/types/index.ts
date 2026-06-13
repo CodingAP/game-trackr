@@ -81,7 +81,15 @@ export interface EditorStateBody {
   imageLibrary: ImageLibraryData;
 }
 
-export type ThemeId = 'dark' | 'light' | 'midnight' | 'forest';
+export type ThemeId =
+  | 'dark'
+  | 'light'
+  | 'midnight'
+  | 'forest'
+  | 'purple-dark'
+  | 'purple-light'
+  | 'red-dark'
+  | 'red-light';
 
 export interface ThemeOption {
   id: ThemeId;
@@ -115,7 +123,35 @@ export const THEME_OPTIONS: ThemeOption[] = [
     description: 'Dark green tones with bright green accents',
     preview: ['#050f0a', '#0f1f14', '#22c55e'],
   },
+  {
+    id: 'purple-dark',
+    name: 'Purple Dark',
+    description: 'Deep violet background with bright purple accents',
+    preview: ['#0f0a1a', '#181028', '#8b5cf6'],
+  },
+  {
+    id: 'purple-light',
+    name: 'Purple Light',
+    description: 'Soft lavender background with violet accents',
+    preview: ['#faf5ff', '#ffffff', '#7c3aed'],
+  },
+  {
+    id: 'red-dark',
+    name: 'Red Dark',
+    description: 'Deep crimson background with bright red accents',
+    preview: ['#140808', '#1e0c0c', '#ef4444'],
+  },
+  {
+    id: 'red-light',
+    name: 'Red Light',
+    description: 'Warm blush background with red accents',
+    preview: ['#fff1f2', '#ffffff', '#dc2626'],
+  },
 ];
+
+export function getThemeAccentColor(theme: ThemeId): string {
+  return THEME_OPTIONS.find((entry) => entry.id === theme)?.preview[2] ?? '#10b981';
+}
 
 export interface GameMeta {
   slug: string;
