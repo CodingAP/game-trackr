@@ -31,6 +31,10 @@ import {
   buildProgressBarMarker,
   replaceProgressMarkerReference,
 } from '../markdown/completionProgress.js';
+import {
+  countPagesWithExtraWhitespace,
+  removeExtraWhitespaceFromPages,
+} from '../markdown/journalCleanup.js';
 import type { ProgressBar } from '../types/index.js';
 import {
   createGame,
@@ -49,6 +53,7 @@ import { consumeImportDraft } from '../utils/journalBundle.js';
 import { replaceCheckboxMarkerId } from '../markdown/managedCheckboxes.js';
 import { navigate } from '../router.js';
 import { renderEditorTabHelp, wireEditorTabHelp } from '../components/editorTabHelp.js';
+import { wireReturnToTop } from '../components/ReturnToTop.js';
 import { icon, iconLabel } from '../components/icons.js';
 
 const DEFAULT_CONTENT = '# New Game\n\n- [[cb:goal-1]] Add your first goal\n';
@@ -83,7 +88,7 @@ export async function renderEditor(
 
   container.innerHTML = `
     <div class="app-shell max-w-6xl">
-      <h1 class="page-heading mb-2">${isNew ? 'Create Game' : 'Edit Game'}</h1>
+      <h1 id="editor-top" class="page-heading mb-2">${isNew ? 'Create Game' : 'Edit Game'}</h1>
       ${
         isNew
           ? `
@@ -154,8 +159,10 @@ export async function renderEditor(
         </div>
 
         <div id="tab-admin" class="editor-tab-panel" hidden>
-          ${renderEditorTabHelp('admin')}
-          <div class="editor-tab-panel-body space-y-4">
+          <div class="editor-tab-panel-body admin-tab-panel-body space-y-4">
+            <div class="admin-tab-header">
+              ${renderEditorTabHelp('admin')}
+            </div>
             <div id="mobygames-admin" class="mb-4"></div>
             <div id="editor-admin"></div>
           </div>
@@ -163,6 +170,9 @@ export async function renderEditor(
 
         <p id="editor-error" class="text-sm text-red-400 hidden"></p>
       </form>
+      <button type="button" id="return-top" class="return-top" aria-label="Return to top">
+        ${icon('arrow-up', 'ui-icon ui-icon-lg')}
+      </button>
     </div>
   `;
 
@@ -170,6 +180,9 @@ export async function renderEditor(
   const errorEl = container.querySelector('#editor-error') as HTMLElement;
   const viewerBtn = container.querySelector('#open-viewer') as HTMLButtonElement;
   const editorRoot = container.querySelector('#markdown-editor-root') as HTMLElement;
+  const returnTopButton = container.querySelector('#return-top') as HTMLElement;
+  const editorTop = container.querySelector('#editor-top') as HTMLElement;
+  const cleanupReturnTop = wireReturnToTop(returnTopButton, editorTop);
 
   let activeSlug = slug;
   let cleanupImageEditor: (() => void) | null = null;
@@ -713,6 +726,20 @@ export async function renderEditor(
 
             return removed;
           },
+          countPagesWithExtraWhitespace: () =>
+            countPagesWithExtraWhitespace(getMergedJournalContents()),
+          removeExtraWhitespace: () => {
+            const current = getMergedJournalContents();
+            const result = removeExtraWhitespaceFromPages(current);
+            if (result.changedPages === 0) return 0;
+
+            for (const [pageId, content] of Object.entries(result.contents)) {
+              if (current[pageId] === content) continue;
+              setPageContent?.(pageId, content);
+            }
+
+            return result.changedPages;
+          },
         },
       );
 
@@ -731,6 +758,10 @@ export async function renderEditor(
         form.removeEventListener('input', onFormInput);
         form.removeEventListener('change', onFormInput);
       };
+
+      queueMicrotask(() => {
+        window.scrollTo(0, 0);
+      });
   } catch (error) {
     errorEl.textContent = error instanceof Error ? error.message : 'Failed to load game';
     errorEl.classList.remove('hidden');
@@ -841,6 +872,7 @@ export async function renderEditor(
     cleanupMarkdownChange?.();
     closeEmbedPopover?.();
     cleanupCollapsible();
+    cleanupReturnTop();
     cleanupTabHelp?.();
     cleanupTabs?.();
     cleanupPagesEditor?.();

@@ -1,7 +1,6 @@
 import {
   AuthRequiredError,
   deleteGame,
-  duplicateGame,
   fetchGameImages,
 } from '../api/client.js';
 import { requireAuth } from './AuthPrompt.js';
@@ -20,6 +19,8 @@ import { iconLabel } from './icons.js';
 interface EditorAdminOptions {
   countAbandonedEmbeds?: () => number;
   clearAbandonedEmbeds?: () => number;
+  countPagesWithExtraWhitespace?: () => number;
+  removeExtraWhitespace?: () => number;
   createMode?: boolean;
 }
 
@@ -39,9 +40,12 @@ export function mountEditorAdmin(
       ${renderCollapsiblePanel({
         title: 'Maintenance',
         content: `
-          <p class="text-muted text-sm mb-3">Remove markdown badges that reference deleted checkboxes, progress bars, or maps.</p>
-          <button type="button" class="btn-secondary" data-action="clear-abandoned-embeds">${iconLabel('trash', 'Clear abandoned badges')}</button>
-          <p id="admin-clear-embeds-status" class="text-muted text-sm"></p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="btn-secondary" data-action="clear-abandoned-embeds">${iconLabel('trash', 'Clear abandoned badges')}</button>
+            <button type="button" class="btn-secondary" data-action="remove-extra-whitespace">${iconLabel('edit', 'Remove extra whitespace')}</button>
+          </div>
+          <p id="admin-clear-embeds-status" class="text-muted text-sm mt-3"></p>
+          <p id="admin-whitespace-status" class="text-muted text-sm"></p>
         `,
       })}
       ${
@@ -53,23 +57,6 @@ export function mountEditorAdmin(
         content: `
           <button type="button" class="btn-secondary" data-action="export-journal">${iconLabel('download', 'Export journal')}</button>
           <p id="admin-export-status" class="text-muted text-sm"></p>
-        `,
-      })}
-      ${renderCollapsiblePanel({
-        title: 'Duplicate',
-        content: `
-          <div class="grid gap-4 sm:grid-cols-2">
-            <label class="block">
-              <span class="label">New game name</span>
-              <input type="text" id="duplicate-name" class="input" value="${escapeHtml(gameName)} (Copy)" />
-            </label>
-            <label class="block">
-              <span class="label">New slug</span>
-              <input type="text" id="duplicate-slug" class="input" value="${escapeHtml(slug)}-copy" pattern="[a-z0-9]+(-[a-z0-9]+)*" />
-            </label>
-          </div>
-          <button type="button" class="btn-secondary" data-action="duplicate">${iconLabel('copy', 'Duplicate game')}</button>
-          <p id="admin-duplicate-status" class="text-muted text-sm"></p>
         `,
       })}
       ${renderCollapsiblePanel({
@@ -86,8 +73,8 @@ export function mountEditorAdmin(
   `;
 
   const clearEmbedsStatus = host.querySelector('#admin-clear-embeds-status') as HTMLElement;
+  const whitespaceStatus = host.querySelector('#admin-whitespace-status') as HTMLElement;
   const exportStatus = host.querySelector('#admin-export-status') as HTMLElement;
-  const duplicateStatus = host.querySelector('#admin-duplicate-status') as HTMLElement;
   const deleteStatus = host.querySelector('#admin-delete-status') as HTMLElement;
 
   const onClearAbandonedEmbeds = () => {
@@ -136,21 +123,28 @@ export function mountEditorAdmin(
     }
   };
 
-  const onDuplicate = async () => {
-    const nameInput = host.querySelector('#duplicate-name') as HTMLInputElement;
-    const slugInput = host.querySelector('#duplicate-slug') as HTMLInputElement;
-    duplicateStatus.textContent = 'Duplicating...';
-
-    try {
-      const game = await duplicateGame(slug, slugInput.value.trim(), nameInput.value.trim());
-      navigate(`/editor/${game.slug}`);
-    } catch (error) {
-      if (error instanceof AuthRequiredError && (await requireAuth())) {
-        await onDuplicate();
-        return;
-      }
-      duplicateStatus.textContent = error instanceof Error ? error.message : 'Duplicate failed';
+  const onRemoveExtraWhitespace = () => {
+    if (!options.removeExtraWhitespace) {
+      whitespaceStatus.textContent = 'Cleanup is unavailable.';
+      return;
     }
+
+    const pageCount = options.countPagesWithExtraWhitespace?.() ?? 0;
+    if (pageCount === 0) {
+      whitespaceStatus.textContent = 'No extra whitespace found.';
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Clean up extra whitespace on ${pageCount} page${pageCount === 1 ? '' : 's'}? This removes trailing spaces and collapses extra blank lines. Save the game to keep changes.`,
+    );
+    if (!confirmed) return;
+
+    const cleanedPages = options.removeExtraWhitespace();
+    whitespaceStatus.textContent =
+      cleanedPages > 0
+        ? `Cleaned ${cleanedPages} page${cleanedPages === 1 ? '' : 's'}. Save the game to keep changes.`
+        : 'No extra whitespace found.';
   };
 
   const onDelete = async () => {
@@ -173,8 +167,8 @@ export function mountEditorAdmin(
   };
 
   host.querySelector('[data-action="clear-abandoned-embeds"]')?.addEventListener('click', onClearAbandonedEmbeds);
+  host.querySelector('[data-action="remove-extra-whitespace"]')?.addEventListener('click', onRemoveExtraWhitespace);
   host.querySelector('[data-action="export-journal"]')?.addEventListener('click', onExport);
-  host.querySelector('[data-action="duplicate"]')?.addEventListener('click', onDuplicate);
   host.querySelector('[data-action="delete"]')?.addEventListener('click', onDelete);
 
   const cleanupCollapsible = wireCollapsiblePanels(host);
@@ -185,16 +179,11 @@ export function mountEditorAdmin(
       'click',
       onClearAbandonedEmbeds,
     );
+    host.querySelector('[data-action="remove-extra-whitespace"]')?.removeEventListener(
+      'click',
+      onRemoveExtraWhitespace,
+    );
     host.querySelector('[data-action="export-journal"]')?.removeEventListener('click', onExport);
-    host.querySelector('[data-action="duplicate"]')?.removeEventListener('click', onDuplicate);
     host.querySelector('[data-action="delete"]')?.removeEventListener('click', onDelete);
   };
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
 }

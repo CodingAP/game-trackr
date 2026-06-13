@@ -29,21 +29,23 @@ const EDITOR_TAB_HELP: Record<EditorTabId, string> = {
   `,
   admin: `
     <p><strong>MobyGames</strong> — Link this journal to a MobyGames entry for box art, release info, and description in the viewer.</p>
-    <p><strong>Maintenance</strong> — Clear abandoned badges removes embed markers that reference deleted checkboxes, progress bars, or maps.</p>
+    <p><strong>Maintenance</strong> — Clear abandoned badges removes embed markers that reference deleted checkboxes, progress bars, or maps. Remove extra whitespace trims trailing spaces and collapses extra blank lines across journal pages.</p>
     <p><strong>Export</strong> — Download pages, checkboxes, progress bars, maps, and uploaded media as a <code>.gametrackr.json</code> file.</p>
-    <p><strong>Duplicate</strong> — Create a copy of this game with a new name and slug.</p>
     <p><strong>Delete</strong> — Permanently remove this game, including its pages, media, and progress bars.</p>
   `,
 };
 
-export function renderEditorTabHelp(tabId: EditorTabId): string {
+export function renderHelpButton(
+  content: string,
+  ariaLabel = 'Help',
+): string {
   return `
     <div class="editor-tab-help">
       <button
         type="button"
         class="editor-tab-help-trigger"
         data-tab-help-trigger
-        aria-label="Help for this tab"
+        aria-label="${ariaLabel}"
         aria-expanded="false"
         aria-haspopup="dialog"
       >${icon('info', 'ui-icon ui-icon-sm')}</button>
@@ -51,10 +53,14 @@ export function renderEditorTabHelp(tabId: EditorTabId): string {
         <button type="button" class="editor-tab-help-close" data-tab-help-close aria-label="Close help">
           ${icon('close', 'ui-icon ui-icon-sm')}
         </button>
-        <div class="editor-tab-help-content">${EDITOR_TAB_HELP[tabId]}</div>
+        <div class="editor-tab-help-content">${content}</div>
       </div>
     </div>
   `;
+}
+
+export function renderEditorTabHelp(tabId: EditorTabId): string {
+  return renderHelpButton(EDITOR_TAB_HELP[tabId], 'Help for this tab');
 }
 
 export function wireEditorTabHelp(scope: ParentNode): () => void {
