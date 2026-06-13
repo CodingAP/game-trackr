@@ -9,6 +9,7 @@ const IMAGE_DEFAULTS: ImageViewportSettings = {
   width: 800,
   height: 600,
   scaleToFit: false,
+  maintainAspectRatio: false,
 };
 
 const DEFAULT_THEME: ThemeId = 'dark';
@@ -23,6 +24,7 @@ export function getImageViewportSettings(): ImageViewportSettings {
       width: normalizeDimension(parsed.width, IMAGE_DEFAULTS.width),
       height: normalizeDimension(parsed.height, IMAGE_DEFAULTS.height),
       scaleToFit: Boolean(parsed.scaleToFit),
+      maintainAspectRatio: Boolean(parsed.maintainAspectRatio),
     };
   } catch {
     return { ...IMAGE_DEFAULTS };
@@ -35,6 +37,7 @@ export function saveImageViewportSettings(settings: ImageViewportSettings): Imag
     width: normalizeDimension(settings.width, IMAGE_DEFAULTS.width),
     height: normalizeDimension(settings.height, IMAGE_DEFAULTS.height),
     scaleToFit: settings.scaleToFit,
+    maintainAspectRatio: settings.maintainAspectRatio,
   };
   localStorage.setItem(IMAGE_STORAGE_KEY, JSON.stringify(normalized));
   return normalized;
@@ -62,8 +65,15 @@ export function initTheme(): void {
   applyTheme(getTheme());
 }
 
-export function formatViewportTitle(width: number, height: number, scaleToFit = false): string {
-  return scaleToFit ? `${width}x${height} fit` : `${width}x${height}`;
+export function formatViewportTitle(
+  width: number,
+  height: number,
+  scaleToFit = false,
+  maintainAspectRatio = false,
+): string {
+  let title = scaleToFit ? `${width}x${height} fit` : `${width}x${height}`;
+  if (maintainAspectRatio) title += ' aspect';
+  return title;
 }
 
 function normalizeDimension(value: unknown, fallback: number): number {

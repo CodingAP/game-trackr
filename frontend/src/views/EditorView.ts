@@ -538,6 +538,9 @@ export async function renderEditor(
         if (tabId === 'content') {
           void refreshEmbedContext();
         }
+        if (tabId === 'checkboxes') {
+          refreshCheckboxesEditor?.();
+        }
       });
       switchTab = tabs.setTab;
       cleanupTabs = tabs.cleanup;
@@ -608,6 +611,9 @@ export async function renderEditor(
         {
           onProgressBarIdChange: (oldId, newId) => {
             replaceProgressMarkersInJournal(oldId, newId);
+          },
+          onProgressBarsChanged: () => {
+            refreshCheckboxesEditor?.();
           },
         },
       );
@@ -848,6 +854,5 @@ export async function renderEditor(
     document.removeEventListener('keydown', onKeyDown);
     viewerBtn.removeEventListener('click', onOpenViewerClick);
     form.removeEventListener('submit', onSubmit);
-    void refreshCheckboxesEditor;
   };
 }

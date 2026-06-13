@@ -17,6 +17,10 @@ import {
 import { isVideoUrl } from '../markdown/media.js';
 import { getImageViewportSettings } from '../storage/settings.js';
 import {
+  readMediaNaturalAspectRatio,
+  wireViewportAspectRatio,
+} from '../utils/viewportAspectRatio.js';
+import {
   parseImageEmbedRaw,
   readImageEmbedLayoutOptions,
 } from '../markdown/imageDocument.js';
@@ -159,6 +163,8 @@ function renderImageMetadataForm(
   });
   const titleAttr = embedTitle ? ` title="${escapeHtml(embedTitle)}"` : '';
   const isVideo = isVideoUrl(parsed.url);
+  const maintainAspectRatio =
+    parsed.viewport?.maintainAspectRatio ?? getImageViewportSettings().maintainAspectRatio;
   const figureClass = isVideo
     ? `embed-edit-image-preview media-figure${parsed.centered ? ' media-figure-centered' : ''}`
     : `embed-edit-image-preview image-figure${parsed.centered ? ' image-figure-centered' : ''}`;
@@ -199,6 +205,10 @@ function renderImageMetadataForm(
       <label class="settings-check">
         <input type="checkbox" data-field="scale" ${parsed.viewport?.scaleToFit ? 'checked' : ''} />
         <span>Scale to fit viewport</span>
+      </label>
+      <label class="settings-check">
+        <input type="checkbox" data-field="maintain-aspect" ${maintainAspectRatio ? 'checked' : ''} />
+        <span>Maintain aspect ratio</span>
       </label>
       <label class="settings-check">
         <input type="checkbox" data-field="center" ${parsed.centered ? 'checked' : ''} />
@@ -276,11 +286,14 @@ export function openEmbedEditPopover(options: {
   const listSearch = wireListSearch(popover, {
     itemSelector: '[data-search-text]',
   });
+  let cleanupAspectRatio = () => {};
+  let refreshAspectRatio = () => {};
 
   const close = () => {
     if (target.kind === 'progress') {
       applyProgressName();
     }
+    cleanupAspectRatio();
     listSearch.cleanup();
     document.removeEventListener('keydown', onKeyDown);
     document.removeEventListener('mousedown', onDocumentMouseDown);
@@ -453,6 +466,18 @@ export function openEmbedEditPopover(options: {
     const preview = popover.querySelector('[data-role="embed-image-preview"]') as HTMLElement | null;
     const form = popover.querySelector('[data-image-form]') as HTMLElement | null;
 
+    const aspectRatioControls = wireViewportAspectRatio(popover, {
+      widthField: '[data-field="width"]',
+      heightField: '[data-field="height"]',
+      lockField: '[data-field="maintain-aspect"]',
+      resolveAspectRatio: () => {
+        const media = preview?.querySelector('img, video') as HTMLImageElement | HTMLVideoElement | null;
+        return readMediaNaturalAspectRatio(media);
+      },
+    });
+    cleanupAspectRatio = aspectRatioControls.cleanup;
+    refreshAspectRatio = aspectRatioControls.refreshAspectRatio;
+
     const isVideoPreview = preview?.dataset.mediaKind === 'video';
 
     const refreshImagePreview = () => {
@@ -492,12 +517,21 @@ export function openEmbedEditPopover(options: {
       openImageInNewTab(url);
     });
 
-    form?.querySelectorAll('[data-field="width"], [data-field="height"], [data-field="scale"], [data-field="center"]').forEach(
+    form?.querySelectorAll('[data-field="width"], [data-field="height"], [data-field="scale"], [data-field="center"], [data-field="maintain-aspect"]').forEach(
       (field) => {
         field.addEventListener('input', refreshImagePreview);
         field.addEventListener('change', refreshImagePreview);
       },
     );
+
+    preview?.querySelector('img, video')?.addEventListener('load', () => {
+      refreshAspectRatio();
+      refreshImagePreview();
+    });
+    preview?.querySelector('video')?.addEventListener('loadedmetadata', () => {
+      refreshAspectRatio();
+      refreshImagePreview();
+    });
   }
 
   wireCheckboxIdSuggestion(

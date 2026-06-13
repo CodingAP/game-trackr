@@ -77,7 +77,46 @@ export function replaceDocumentImage(
   options: ImageSnippetOptions,
 ): string {
   const snippet = buildImageSnippet(options);
+  if (snippet === image.raw) {
+    return content;
+  }
   return `${content.slice(0, image.start)}${snippet}${content.slice(image.end)}`;
+}
+
+function imageSourcesEqual(
+  left: ImageSourceLink | undefined,
+  right: ImageSourceLink | undefined,
+): boolean {
+  if (!left && !right) return true;
+  if (!left || !right) return false;
+  return left.label === right.label && left.url === right.url;
+}
+
+function imageViewportsEqual(
+  left: ParsedViewport | undefined,
+  right: ParsedViewport | undefined,
+): boolean {
+  if (!left && !right) return true;
+  if (!left || !right) return false;
+  return (
+    left.width === right.width &&
+    left.height === right.height &&
+    left.scaleToFit === right.scaleToFit &&
+    Boolean(left.maintainAspectRatio) === Boolean(right.maintainAspectRatio)
+  );
+}
+
+function imageEmbedOptionsEqual(
+  left: ImageSnippetOptions,
+  right: ImageSnippetOptions,
+): boolean {
+  return (
+    left.url === right.url &&
+    left.alt === right.alt &&
+    Boolean(left.centered) === Boolean(right.centered) &&
+    imageViewportsEqual(left.viewport, right.viewport) &&
+    imageSourcesEqual(left.source, right.source)
+  );
 }
 
 export function removeDocumentImage(content: string, image: DocumentImage): string {
@@ -121,13 +160,21 @@ export function propagateImageMetadataInContent(
 
   for (const image of matches) {
     const parsed = parseImageEmbedRaw(image.raw);
-    next = replaceDocumentImage(next, image, {
+    if (!parsed) continue;
+
+    const nextOptions: ImageSnippetOptions = {
       alt: metadata.alt,
       url,
-      viewport: parsed?.viewport,
+      viewport: parsed.viewport,
       source: metadata.source,
-      centered: parsed?.centered,
-    });
+      centered: parsed.centered,
+    };
+
+    if (imageEmbedOptionsEqual(parsed, nextOptions)) {
+      continue;
+    }
+
+    next = replaceDocumentImage(next, image, nextOptions);
   }
 
   return next;
@@ -174,8 +221,13 @@ export function readImageViewportOptions(form: HTMLElement): ParsedViewport | un
   const width = Number((form.querySelector('[data-field="width"]') as HTMLInputElement).value);
   const height = Number((form.querySelector('[data-field="height"]') as HTMLInputElement).value);
   const scaleToFit = (form.querySelector('[data-field="scale"]') as HTMLInputElement).checked;
+  const maintainAspectRatio =
+    (form.querySelector('[data-field="maintain-aspect"]') as HTMLInputElement | null)?.checked ??
+    false;
   const hasViewport = Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
-  return hasViewport ? { width, height, scaleToFit } : undefined;
+  return hasViewport
+    ? { width, height, scaleToFit, maintainAspectRatio }
+    : undefined;
 }
 
 export function readImageEmbedLayoutOptions(form: HTMLElement): {

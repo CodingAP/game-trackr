@@ -2,7 +2,7 @@ import type { ImageViewportSettings } from '../types/index.js';
 import { formatViewportTitle } from '../storage/settings.js';
 import { isVideoUrl } from './media.js';
 
-const VIEWPORT_TITLE = /^(\d+)\s*[x×]\s*(\d+)(?:\s+(fit|scale))?(?:\s+center)?$/i;
+const VIEWPORT_TITLE = /^(\d+)\s*[x×]\s*(\d+)(?:\s|$)/i;
 const CENTER_ONLY_TITLE = /^center$/i;
 const MARKDOWN_LINK = /^\[([^\]]+)\]\(([^)]+)\)$/;
 
@@ -10,6 +10,7 @@ export interface ParsedViewport {
   width: number;
   height: number;
   scaleToFit: boolean;
+  maintainAspectRatio?: boolean;
 }
 
 export interface ImageSourceLink {
@@ -25,12 +26,15 @@ export function parseCenteredTitle(title: string | null | undefined): boolean {
 
 export function parseViewportTitle(title: string | null | undefined): ParsedViewport | null {
   if (!title) return null;
-  const match = title.trim().match(VIEWPORT_TITLE);
+  const trimmed = title.trim();
+  const match = trimmed.match(VIEWPORT_TITLE);
   if (!match) return null;
+  const rest = trimmed.slice(match[0].length).toLowerCase();
   return {
     width: Number(match[1]),
     height: Number(match[2]),
-    scaleToFit: Boolean(match[3]),
+    scaleToFit: /\b(?:fit|scale)\b/.test(rest),
+    maintainAspectRatio: /\baspect\b/.test(rest),
   };
 }
 
@@ -43,6 +47,7 @@ export function formatImageEmbedTitle(options: {
       options.viewport.width,
       options.viewport.height,
       options.viewport.scaleToFit,
+      options.viewport.maintainAspectRatio ?? false,
     );
     return options.centered ? `${base} center` : base;
   }
@@ -68,6 +73,10 @@ export interface ImageSnippetOptions {
   centered?: boolean;
 }
 
+export function importImageSourceFromUrl(url: string): ImageSourceLink {
+  return { label: 'Source', url: url.trim() };
+}
+
 function buildVideoSnippet(options: ImageSnippetOptions): string {
   const embedTitle = formatImageEmbedTitle(options);
   const titleAttr = embedTitle ? ` title="${escapeAttr(embedTitle)}"` : '';
@@ -76,10 +85,10 @@ function buildVideoSnippet(options: ImageSnippetOptions): string {
 
   if (options.source) {
     const sourceLink = `<a href="${escapeAttr(options.source.url)}">${escapeHtml(options.source.label)}</a>`;
-    return `\n<figure class="${figureClass}">\n  ${videoTag}\n  <figcaption class="media-source">${sourceLink}</figcaption>\n</figure>\n`;
+    return `<figure class="${figureClass}">\n  ${videoTag}\n  <figcaption class="media-source">${sourceLink}</figcaption>\n</figure>`;
   }
 
-  return `\n<figure class="${figureClass}">\n  ${videoTag}\n</figure>\n`;
+  return `<figure class="${figureClass}">\n  ${videoTag}\n</figure>`;
 }
 
 export function buildImageSnippet(options: ImageSnippetOptions): string {
@@ -94,15 +103,15 @@ export function buildImageSnippet(options: ImageSnippetOptions): string {
 
   if (options.source) {
     const sourceLink = `<a href="${escapeAttr(options.source.url)}">${escapeHtml(options.source.label)}</a>`;
-    return `\n<figure class="${figureClass}">\n  <img src="${options.url}" alt="${alt}"${titleAttr} />\n  <figcaption class="image-source">${sourceLink}</figcaption>\n</figure>\n`;
+    return `<figure class="${figureClass}">\n  <img src="${options.url}" alt="${alt}"${titleAttr} />\n  <figcaption class="image-source">${sourceLink}</figcaption>\n</figure>`;
   }
 
   if (options.viewport || options.centered) {
     const title = embedTitle ?? '';
-    return `\n![${alt}](${options.url}${title ? ` "${title}"` : ''})\n`;
+    return `![${alt}](${options.url}${title ? ` "${title}"` : ''})`;
   }
 
-  return `\n![${alt}](${options.url})\n`;
+  return `![${alt}](${options.url})`;
 }
 
 export function openImageInNewTab(url: string): void {

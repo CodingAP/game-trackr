@@ -149,7 +149,12 @@ export async function renderViewer(
     let cleanupImageLinks: (() => void) | null = null;
     let cleanupReturnTop = wireReturnToTop(returnTopButton, viewerTop);
 
-    const renderPage = (pageId: string) => {
+    const scrollJournalIntoView = () => {
+      const journalPanel = container.querySelector('.viewer-content-panel') as HTMLElement | null;
+      journalPanel?.scrollIntoView({ block: 'start' });
+    };
+
+    const renderPage = (pageId: string, options: { scrollIntoView?: boolean } = {}) => {
       activePageId = pageId;
       const content = journal.contents[pageId] ?? '';
       body.innerHTML = renderMarkdown(
@@ -189,9 +194,18 @@ export async function renderViewer(
       cleanupToc?.();
       cleanupToc = wireTocNav(tocContent, {
         onPageChange: (nextPageId) => {
-          navigate(`/viewer/${slug}/${nextPageId}`);
+          if (nextPageId === activePageId) return;
+          renderPage(nextPageId, { scrollIntoView: true });
+          const path = `/viewer/${slug}/${nextPageId}`;
+          if (window.location.pathname !== path) {
+            history.pushState(null, '', path);
+          }
         },
       });
+
+      if (options.scrollIntoView) {
+        queueMicrotask(scrollJournalIntoView);
+      }
     };
 
     renderPage(activePageId);

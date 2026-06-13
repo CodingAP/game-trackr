@@ -10,7 +10,7 @@ import {
   propagateImageMetadataInPages,
   removeAllDocumentImagesByUrl,
 } from '../markdown/imageDocument.js';
-import { buildImageSnippet } from '../markdown/images.js';
+import { buildImageSnippet, importImageSourceFromUrl } from '../markdown/images.js';
 import { defaultMediaAlt, isVideoUrl } from '../markdown/media.js';
 import {
   getLibraryEntry,
@@ -188,6 +188,15 @@ export function mountImageEditor(
           />
           <button type="button" class="btn-secondary" data-action="import-url">${iconLabel('link', 'Import')}</button>
         </div>
+        <label class="block mt-2">
+          <span class="label">Alt text</span>
+          <input
+            type="text"
+            id="image-import-alt-input"
+            class="input"
+            placeholder="Optional — defaults to filename"
+          />
+        </label>
         <p class="hint mt-1">Downloads the file to your journal after verifying it is a supported image or video.</p>
       </div>
       <div class="flex flex-wrap items-center gap-3">
@@ -209,6 +218,7 @@ export function mountImageEditor(
   const listHost = container.querySelector('[data-image-list]') as HTMLElement;
   const uploadInput = container.querySelector('#image-upload-input') as HTMLInputElement;
   const importUrlInput = container.querySelector('#image-import-url-input') as HTMLInputElement;
+  const importAltInput = container.querySelector('#image-import-alt-input') as HTMLInputElement;
   const uploadStatus = container.querySelector('#image-upload-status') as HTMLElement;
   const uploadButton = container.querySelector('[data-action="upload-images"]') as HTMLButtonElement;
   const listSearch = wireListSearch(container, {
@@ -557,12 +567,15 @@ export function mountImageEditor(
 
     try {
       const uploaded = await uploadGameImageFromUrl(slug, remoteUrl);
+      const alt = importAltInput.value.trim() || defaultMediaAlt(uploaded.filename);
       imageLibrary = upsertLibraryEntry(imageLibrary, {
         url: uploaded.url,
         filename: uploaded.filename,
-        alt: defaultMediaAlt(uploaded.filename),
+        alt,
+        source: importImageSourceFromUrl(remoteUrl),
       });
       importUrlInput.value = '';
+      importAltInput.value = '';
       uploadStatus.textContent = 'Media imported from URL.';
       await refreshUploaded();
     } catch (error) {

@@ -6,6 +6,7 @@ export const LOCAL_STORAGE_KEYS = [
   'game-tracking:notes',
   'game-tracking:theme',
   'game-tracking:image-viewport',
+  'game-tracking:library-folders',
 ] as const;
 
 export const BACKUP_VERSION = 1;
@@ -138,6 +139,7 @@ export function describeBackupContents(keys: string[]): string {
     'game-tracking:notes': 'notes',
     'game-tracking:theme': 'theme',
     'game-tracking:image-viewport': 'media viewport settings',
+    'game-tracking:library-folders': 'library folders',
   };
 
   return keys.map((key) => labels[key] ?? key).join(', ');

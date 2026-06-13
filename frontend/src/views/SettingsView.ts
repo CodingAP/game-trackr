@@ -5,18 +5,12 @@ import {
   exportLocalData,
   importLocalData,
 } from '../storage/backup.js';
-import {
-  getImageViewportSettings,
-  getTheme,
-  saveImageViewportSettings,
-  saveTheme,
-} from '../storage/settings.js';
+import { getTheme, saveTheme } from '../storage/settings.js';
 import { THEME_OPTIONS } from '../types/index.js';
 import type { ThemeId } from '../types/index.js';
 import { iconLabel } from '../components/icons.js';
 
 export function renderSettings(container: HTMLElement): () => void {
-  const viewportSettings = getImageViewportSettings();
   const currentTheme = getTheme();
 
   const themeContent = `
@@ -45,46 +39,11 @@ export function renderSettings(container: HTMLElement): () => void {
     <p id="theme-status" class="text-muted text-sm mt-3"></p>
   `;
 
-  const viewportContent = `
-    <p class="text-muted text-sm">
-      By default, images and videos display at full size within the content area and scroll when needed.
-      Enable a custom viewport to constrain size; optionally scale media to fit.
-      Per-embed overrides:
-      <code class="text-accent">![alt](url "640x480")</code>,
-      <code class="text-accent">![alt](url "640x480 fit")</code>, or add a source via
-      <code class="text-accent">![alt](url "[Source label](https://example.com)")</code>.
-    </p>
-    <form id="viewport-form" class="space-y-4">
-      <label class="settings-check">
-        <input type="checkbox" id="viewport-enabled" ${viewportSettings.enabled ? 'checked' : ''} />
-        <span>Use custom viewport size</span>
-      </label>
-      <div id="viewport-fields" class="grid gap-4 sm:grid-cols-2 ${viewportSettings.enabled ? '' : 'is-disabled'}">
-        <label class="block">
-          <span class="label">Width (px)</span>
-          <input type="number" id="viewport-width" class="input" min="1" step="1" value="${viewportSettings.width}" ${viewportSettings.enabled ? '' : 'disabled'} />
-        </label>
-        <label class="block">
-          <span class="label">Height (px)</span>
-          <input type="number" id="viewport-height" class="input" min="1" step="1" value="${viewportSettings.height}" ${viewportSettings.enabled ? '' : 'disabled'} />
-        </label>
-      </div>
-      <label class="settings-check ${viewportSettings.enabled ? '' : 'is-disabled'}">
-        <input type="checkbox" id="viewport-scale" ${viewportSettings.scaleToFit ? 'checked' : ''} ${viewportSettings.enabled ? '' : 'disabled'} />
-        <span>Scale media to fit viewport</span>
-      </label>
-      <div class="flex items-center gap-3">
-        <button type="submit" class="btn-primary">${iconLabel('save', 'Save media settings')}</button>
-        <span id="image-settings-status" class="text-muted text-sm"></span>
-      </div>
-    </form>
-  `;
-
   const exportedKeys = Object.keys(exportLocalData().data);
   const backupContent = `
     <p class="text-muted text-sm">
       Download your browser-stored GameTrackr data or restore it on another device.
-      Backups include checkbox progress, playtime, notes, theme, and media viewport settings.
+      Backups include checkbox progress, playtime, notes, and theme.
     </p>
     ${
       exportedKeys.length > 0
@@ -114,32 +73,15 @@ export function renderSettings(container: HTMLElement): () => void {
       </div>
 
       ${renderCollapsiblePanel({ title: 'Theme', className: 'mb-6', content: themeContent })}
-      ${renderCollapsiblePanel({ title: 'Media viewport', className: 'mb-6', content: viewportContent })}
       ${renderCollapsiblePanel({ title: 'Import / export', content: backupContent })}
     </div>
   `;
 
   const themeStatus = container.querySelector('#theme-status') as HTMLElement;
-  const imageStatus = container.querySelector('#image-settings-status') as HTMLElement;
-  const viewportForm = container.querySelector('#viewport-form') as HTMLFormElement;
-  const enabledInput = container.querySelector('#viewport-enabled') as HTMLInputElement;
-  const scaleInput = container.querySelector('#viewport-scale') as HTMLInputElement;
-  const widthInput = container.querySelector('#viewport-width') as HTMLInputElement;
-  const heightInput = container.querySelector('#viewport-height') as HTMLInputElement;
-  const viewportFields = container.querySelector('#viewport-fields') as HTMLElement;
   const importForm = container.querySelector('#import-data-form') as HTMLFormElement;
   const importFileInput = container.querySelector('#import-data-file') as HTMLInputElement;
   const backupStatus = container.querySelector('#backup-status') as HTMLElement;
   const exportButton = container.querySelector('#export-data') as HTMLButtonElement;
-
-  const syncViewportFields = () => {
-    const enabled = enabledInput.checked;
-    widthInput.disabled = !enabled;
-    heightInput.disabled = !enabled;
-    scaleInput.disabled = !enabled;
-    viewportFields.classList.toggle('is-disabled', !enabled);
-    scaleInput.closest('.settings-check')?.classList.toggle('is-disabled', !enabled);
-  };
 
   const onThemeSelect = (event: Event) => {
     const button = event.currentTarget as HTMLButtonElement;
@@ -153,20 +95,6 @@ export function renderSettings(container: HTMLElement): () => void {
       option.setAttribute('aria-checked', String(selected));
     });
     themeStatus.textContent = `${THEME_OPTIONS.find((entry) => entry.id === theme)?.name ?? theme} theme applied.`;
-  };
-
-  const onSaveImages = (event: Event) => {
-    event.preventDefault();
-    saveImageViewportSettings({
-      enabled: enabledInput.checked,
-      width: Number(widthInput.value),
-      height: Number(heightInput.value),
-      scaleToFit: scaleInput.checked,
-    });
-    imageStatus.textContent = 'Media settings saved.';
-    window.setTimeout(() => {
-      imageStatus.textContent = '';
-    }, 3000);
   };
 
   const onExportData = () => {
@@ -206,8 +134,6 @@ export function renderSettings(container: HTMLElement): () => void {
   container.querySelectorAll('[data-theme]').forEach((button) => {
     button.addEventListener('click', onThemeSelect);
   });
-  enabledInput.addEventListener('change', syncViewportFields);
-  viewportForm.addEventListener('submit', onSaveImages);
   exportButton.addEventListener('click', onExportData);
   importForm.addEventListener('submit', onImportData);
 
@@ -218,8 +144,6 @@ export function renderSettings(container: HTMLElement): () => void {
     container.querySelectorAll('[data-theme]').forEach((button) => {
       button.removeEventListener('click', onThemeSelect);
     });
-    enabledInput.removeEventListener('change', syncViewportFields);
-    viewportForm.removeEventListener('submit', onSaveImages);
     exportButton.removeEventListener('click', onExportData);
     importForm.removeEventListener('submit', onImportData);
   };

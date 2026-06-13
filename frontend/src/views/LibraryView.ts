@@ -1,19 +1,64 @@
-import { fetchCheckboxConnections, fetchGames, fetchMobyGamesForGame } from '../api/client.js';
+import {
+  deleteGame,
+  fetchCheckboxConnections,
+  fetchGames,
+  fetchMobyGamesForGame,
+} from '../api/client.js';
 import { renderImportGameControls, wireImportGameButton } from '../components/ImportGameButton.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from '../components/CollapsiblePanel.js';
 import { renderLibraryMobyHtml } from '../components/GameInfoPanel.js';
 import { getProgressCheckboxes, isCheckboxComplete, buildCheckboxIndex } from '../markdown/checkboxes.js';
 import { managedToCheckboxItems } from '../markdown/managedCheckboxes.js';
 import { isLocallyAuthenticated } from '../storage/auth.js';
+import {
+  addLibraryFolder,
+  assignGameToFolder,
+  getFolderForGame,
+  getLibraryFolders,
+  getUncategorizedSlugs,
+  isFolderCollapsed,
+  pruneLibraryFolders,
+  removeLibraryFolder,
+  saveLibraryFolders,
+  setFolderCollapsed,
+  type LibraryFolder,
+  type LibraryFoldersState,
+} from '../storage/libraryFolders.js';
 import { getProgress } from '../storage/progress.js';
 import { navigate } from '../router.js';
-import { iconLabel } from '../components/icons.js';
+import { icon, iconLabel } from '../components/icons.js';
+import type { GameMeta } from '../types/index.js';
 
-function renderLibraryHeaderActions(signedIn: boolean): string {
-  if (!signedIn) return '';
+interface GameCardData {
+  slug: string;
+  name: string;
+  progressLabel: string;
+  mobyHtml: string;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+function renderLibraryHeaderActions(signedIn: boolean, showFolderControls: boolean): string {
+  const folderControls = signedIn && showFolderControls
+    ? `
+      <div class="library-add-folder">
+        <input type="text" id="library-folder-name" class="input" placeholder="New folder name" aria-label="New folder name" />
+        <button type="button" id="library-add-folder" class="btn-secondary">${iconLabel('plus', 'Add folder')}</button>
+      </div>
+    `
+    : '';
+
+  if (!signedIn) return folderControls;
 
   return `
     <div class="library-header-actions">
+      ${folderControls}
       ${renderImportGameControls()}
       <button type="button" id="create-game" class="btn-primary">${iconLabel('plus', 'Create Game')}</button>
     </div>
@@ -46,12 +91,227 @@ function renderEmptyLibrary(signedIn: boolean): string {
   `;
 }
 
+async function buildGameCards(games: GameMeta[]): Promise<Map<string, GameCardData>> {
+  const cards = await Promise.all(
+    games.map(async (game) => {
+      let progressLabel = 'No progress yet';
+      let mobyHtml = '';
+
+      const [checkboxesResult, mobyResult] = await Promise.allSettled([
+        fetchCheckboxConnections(game.slug),
+        fetchMobyGamesForGame(game.slug),
+      ]);
+
+      if (mobyResult.status === 'fulfilled' && mobyResult.value.info) {
+        mobyHtml = renderLibraryMobyHtml(mobyResult.value.info);
+      }
+
+      if (checkboxesResult.status === 'fulfilled') {
+        try {
+          const checkboxes = managedToCheckboxItems(checkboxesResult.value.checkboxes);
+          const progressCheckboxes = getProgressCheckboxes(checkboxes);
+          const progress = getProgress(game.slug);
+          const index = buildCheckboxIndex(checkboxes);
+          const completed = progressCheckboxes.filter((item) =>
+            isCheckboxComplete(item.id, index, progress.checkedItems),
+          ).length;
+          progressLabel =
+            progressCheckboxes.length === 0
+              ? 'No checkboxes'
+              : `${completed} / ${progressCheckboxes.length} complete`;
+        } catch {
+          progressLabel = 'Content unavailable';
+        }
+      } else {
+        progressLabel = 'Content unavailable';
+      }
+
+      return {
+        slug: game.slug,
+        name: game.name,
+        progressLabel,
+        mobyHtml,
+      } satisfies GameCardData;
+    }),
+  );
+
+  return new Map(cards.map((card) => [card.slug, card]));
+}
+
+function renderFolderMoveSelect(
+  slug: string,
+  folders: LibraryFolder[],
+  currentFolderId: string | null,
+): string {
+  const options = [
+    `<option value="" ${currentFolderId ? '' : 'selected'}>Uncategorized</option>`,
+    ...folders.map(
+      (folder) =>
+        `<option value="${escapeHtml(folder.id)}" ${folder.id === currentFolderId ? 'selected' : ''}>${escapeHtml(folder.name)}</option>`,
+    ),
+  ];
+
+  return `
+    <label class="block">
+      <span class="label">Folder</span>
+      <select class="input" data-move-game="${escapeHtml(slug)}">
+        ${options.join('')}
+      </select>
+    </label>
+  `;
+}
+
+function renderGameCard(
+  card: GameCardData,
+  signedIn: boolean,
+  folders: LibraryFolder[],
+  folderState: LibraryFoldersState,
+): string {
+  const editButton = signedIn
+    ? `<button type="button" class="btn-secondary" data-edit="${escapeHtml(card.slug)}">${iconLabel('edit', 'Edit')}</button>`
+    : '';
+
+  const folderSelect = signedIn && folders.length > 0
+    ? renderFolderMoveSelect(card.slug, folders, getFolderForGame(folderState, card.slug)?.id ?? null)
+    : '';
+
+  return renderCollapsiblePanel({
+    title: card.name,
+    className: 'library-game-card',
+    content: `
+      <div class="flex flex-col gap-3">
+        ${card.mobyHtml}
+        <p class="text-sm text-status">${escapeHtml(card.progressLabel)}</p>
+        ${folderSelect}
+        <div class="library-game-actions mt-auto">
+          <button type="button" class="btn-primary" data-view="${escapeHtml(card.slug)}">${iconLabel('eye', 'View')}</button>
+          ${editButton}
+        </div>
+      </div>
+    `,
+  });
+}
+
+function renderGameGrid(
+  slugs: string[],
+  cards: Map<string, GameCardData>,
+  signedIn: boolean,
+  folders: LibraryFolder[],
+  folderState: LibraryFoldersState,
+): string {
+  const rendered = slugs
+    .map((slug) => cards.get(slug))
+    .filter((card): card is GameCardData => Boolean(card))
+    .map((card) => renderGameCard(card, signedIn, folders, folderState));
+
+  if (rendered.length === 0) {
+    return '<p class="text-faint text-sm">No games in this folder.</p>';
+  }
+
+  return `<div class="library-game-grid">${rendered.join('')}</div>`;
+}
+
+function renderFolderSection(
+  folder: LibraryFolder,
+  cards: Map<string, GameCardData>,
+  signedIn: boolean,
+  folders: LibraryFolder[],
+  folderState: LibraryFoldersState,
+): string {
+  const count = folder.gameSlugs.length;
+  const collapsed = isFolderCollapsed(folderState, folder.id);
+  const deleteButton = signedIn
+    ? `<button type="button" class="btn-secondary" data-delete-folder="${escapeHtml(folder.id)}" aria-label="Delete folder">${icon('trash', 'ui-icon ui-icon-sm')}</button>`
+    : '';
+
+  return renderCollapsiblePanel({
+    title: folder.name,
+    className: 'library-folder-panel',
+    defaultOpen: !collapsed,
+    attributes: {
+      'library-folder-id': folder.id,
+    },
+    titleHtml: `
+      <span class="library-folder-title">${icon('library', 'ui-icon ui-icon-sm library-folder-icon')}${escapeHtml(folder.name)}</span>
+      <span class="library-folder-count">${count}</span>
+    `,
+    titleActions: deleteButton,
+    content: renderGameGrid(folder.gameSlugs, cards, signedIn, folders, folderState),
+  });
+}
+
+function renderUncategorizedSection(
+  slugs: string[],
+  cards: Map<string, GameCardData>,
+  signedIn: boolean,
+  folders: LibraryFolder[],
+  folderState: LibraryFoldersState,
+  hasFolders: boolean,
+): string {
+  if (slugs.length === 0) return '';
+
+  const content = renderGameGrid(slugs, cards, signedIn, folders, folderState);
+  if (!hasFolders) return content;
+
+  const collapsed = isFolderCollapsed(folderState, 'uncategorized');
+
+  return renderCollapsiblePanel({
+    title: 'Uncategorized',
+    className: 'library-folder-panel library-folder-panel-uncategorized',
+    defaultOpen: !collapsed,
+    attributes: {
+      'library-folder-id': 'uncategorized',
+    },
+    titleHtml: `
+      <span class="library-folder-title">${escapeHtml('Uncategorized')}</span>
+      <span class="library-folder-count">${slugs.length}</span>
+    `,
+    content,
+  });
+}
+
+function renderLibraryBody(options: {
+  games: GameMeta[];
+  cards: Map<string, GameCardData>;
+  signedIn: boolean;
+  folderState: LibraryFoldersState;
+}): string {
+  const { games, cards, signedIn, folderState } = options;
+  const folders = folderState.folders;
+  const hasFolders = folders.length > 0;
+  const uncategorizedSlugs = getUncategorizedSlugs(folderState, games);
+
+  const folderSections = folders
+    .map((folder) => renderFolderSection(folder, cards, signedIn, folders, folderState))
+    .join('');
+
+  const uncategorizedSection = renderUncategorizedSection(
+    uncategorizedSlugs,
+    cards,
+    signedIn,
+    folders,
+    folderState,
+    hasFolders,
+  );
+
+  if (!hasFolders) {
+    return uncategorizedSection;
+  }
+
+  return `
+    <div class="library-folder-list space-y-4">
+      ${folderSections}
+      ${uncategorizedSection}
+    </div>
+  `;
+}
+
 export async function renderLibrary(container: HTMLElement): Promise<() => void> {
   container.innerHTML = '<div class="app-shell"><p class="text-muted">Loading games...</p></div>';
   const signedIn = isLocallyAuthenticated();
 
   try {
-    const games = await fetchGames();
+    let games = await fetchGames();
 
     if (games.length === 0) {
       container.innerHTML = renderEmptyLibrary(signedIn);
@@ -69,106 +329,172 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
       return () => {};
     }
 
-    const cards = await Promise.all(
-      games.map(async (game) => {
-        let progressLabel = 'No progress yet';
-        let mobyHtml = '';
+    const validSlugs = new Set(games.map((game) => game.slug));
+    let folderState = pruneLibraryFolders(getLibraryFolders(), validSlugs);
+    if (JSON.stringify(folderState) !== JSON.stringify(getLibraryFolders())) {
+      saveLibraryFolders(folderState);
+    }
 
-        const [checkboxesResult, mobyResult] = await Promise.allSettled([
-          fetchCheckboxConnections(game.slug),
-          fetchMobyGamesForGame(game.slug),
-        ]);
+    const cards = await buildGameCards(games);
+    let cleanupCollapsible = () => {};
+    let cleanupImport = () => {};
 
-        if (mobyResult.status === 'fulfilled' && mobyResult.value.info) {
-          mobyHtml = renderLibraryMobyHtml(mobyResult.value.info);
+    const onAddFolderKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        container.querySelector('#library-add-folder')?.dispatchEvent(new Event('click'));
+      }
+    };
+
+    const deleteFolderWithGames = async (folderId: string) => {
+      const folder = folderState.folders.find((entry) => entry.id === folderId);
+      if (!folder) return;
+
+      const count = folder.gameSlugs.length;
+      const message =
+        count === 0
+          ? `Delete folder "${folder.name}"?`
+          : `Delete folder "${folder.name}" and all ${count} game(s) inside? This cannot be undone.`;
+
+      if (!window.confirm(message)) return;
+
+      try {
+        for (const slug of folder.gameSlugs) {
+          await deleteGame(slug);
         }
-
-        if (checkboxesResult.status === 'fulfilled') {
-          try {
-            const checkboxes = managedToCheckboxItems(checkboxesResult.value.checkboxes);
-            const progressCheckboxes = getProgressCheckboxes(checkboxes);
-            const progress = getProgress(game.slug);
-            const index = buildCheckboxIndex(checkboxes);
-            const completed = progressCheckboxes.filter((item) =>
-              isCheckboxComplete(item.id, index, progress.checkedItems),
-            ).length;
-            progressLabel =
-              progressCheckboxes.length === 0
-                ? 'No checkboxes'
-                : `${completed} / ${progressCheckboxes.length} complete`;
-          } catch {
-            progressLabel = 'Content unavailable';
+        removeLibraryFolder(folderId);
+        games = await fetchGames();
+        const nextValidSlugs = new Set(games.map((game) => game.slug));
+        folderState = pruneLibraryFolders(getLibraryFolders(), nextValidSlugs);
+        saveLibraryFolders(folderState);
+        if (games.length === 0) {
+          container.innerHTML = renderEmptyLibrary(signedIn);
+          if (signedIn) {
+            container.querySelector('#create-first')?.addEventListener('click', () => navigate('/editor'));
+            cleanupImport = wireImportGameButton(container);
           }
-        } else {
-          progressLabel = 'Content unavailable';
+          return;
         }
+        const nextCards = await buildGameCards(games);
+        cards.clear();
+        for (const [slug, card] of nextCards) {
+          cards.set(slug, card);
+        }
+        paint();
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : 'Failed to delete folder');
+      }
+    };
 
-        const editButton = signedIn
-          ? `<button type="button" class="btn-secondary" data-edit="${game.slug}">${iconLabel('edit', 'Edit')}</button>`
-          : '';
+    const wireInteractions = () => {
+      cleanupCollapsible();
+      cleanupCollapsible = wireCollapsiblePanels(container, {
+        onToggle: (panel, expanded) => {
+          const folderId = panel.dataset.libraryFolderId;
+          if (!folderId) return;
+          setFolderCollapsed(folderId, !expanded);
+        },
+      });
 
-        return renderCollapsiblePanel({
-          title: game.name,
-          className: 'library-game-card',
-          content: `
-            <div class="flex flex-col gap-3">
-              ${mobyHtml}
-              <p class="text-sm text-status">${progressLabel}</p>
-              <div class="library-game-actions mt-auto">
-                <button type="button" class="btn-primary" data-view="${game.slug}">${iconLabel('eye', 'View')}</button>
-                ${editButton}
-              </div>
+      const onCreate = () => navigate('/editor');
+      container.querySelector('#create-game')?.removeEventListener('click', onCreate);
+      container.querySelector('#create-game')?.addEventListener('click', onCreate);
+
+      const onView = (event: Event) => {
+        const slug = (event.currentTarget as HTMLElement).dataset.view;
+        if (slug) navigate(`/viewer/${slug}`);
+      };
+
+      const onEdit = (event: Event) => {
+        const slug = (event.currentTarget as HTMLElement).dataset.edit;
+        if (slug) navigate(`/editor/${slug}`);
+      };
+
+      container.querySelectorAll('[data-view]').forEach((button) => {
+        button.removeEventListener('click', onView);
+        button.addEventListener('click', onView);
+      });
+      container.querySelectorAll('[data-edit]').forEach((button) => {
+        button.removeEventListener('click', onEdit);
+        button.addEventListener('click', onEdit);
+      });
+
+      const onAddFolder = () => {
+        const addFolderInput = container.querySelector('#library-folder-name') as HTMLInputElement | null;
+        const name = addFolderInput?.value.trim();
+        if (!name) {
+          addFolderInput?.focus();
+          return;
+        }
+        addLibraryFolder(name);
+        if (addFolderInput) addFolderInput.value = '';
+        folderState = getLibraryFolders();
+        paint();
+      };
+
+      const addFolderButton = container.querySelector('#library-add-folder');
+      addFolderButton?.removeEventListener('click', onAddFolder);
+      addFolderButton?.addEventListener('click', onAddFolder);
+
+      const addFolderInput = container.querySelector('#library-folder-name');
+      addFolderInput?.removeEventListener('keydown', onAddFolderKeyDown);
+      addFolderInput?.addEventListener('keydown', onAddFolderKeyDown);
+
+      container.querySelectorAll('[data-move-game]').forEach((select) => {
+        const element = select as HTMLSelectElement;
+        const handler = () => {
+          const slug = element.dataset.moveGame;
+          if (!slug) return;
+          assignGameToFolder(slug, element.value || null);
+          folderState = getLibraryFolders();
+          paint();
+        };
+        element.removeEventListener('change', handler);
+        element.addEventListener('change', handler);
+      });
+
+      container.querySelectorAll('[data-delete-folder]').forEach((button) => {
+        const handler = () => {
+          void deleteFolderWithGames((button as HTMLElement).dataset.deleteFolder ?? '');
+        };
+        button.removeEventListener('click', handler);
+        button.addEventListener('click', handler);
+      });
+    };
+
+    const paint = () => {
+      const body = renderLibraryBody({ games, cards, signedIn, folderState });
+      const libraryBody = container.querySelector('#library-body');
+      if (libraryBody) {
+        libraryBody.innerHTML = body;
+        wireInteractions();
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="app-shell">
+          <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 class="page-heading mb-1">Game Library</h1>
+              <p class="text-muted">Pick a journal to track your completion progress.</p>
             </div>
-          `,
-        });
-      }),
-    );
-
-    container.innerHTML = `
-      <div class="app-shell">
-        <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 class="page-heading mb-1">Game Library</h1>
-            <p class="text-muted">Pick a journal to track your completion progress.</p>
+            ${renderLibraryHeaderActions(signedIn, true)}
           </div>
-          ${renderLibraryHeaderActions(signedIn)}
+          <div id="library-body">${body}</div>
         </div>
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${cards.join('')}</div>
-      </div>
-    `;
+      `;
 
-    const onCreate = () => navigate('/editor');
-    const onView = (event: Event) => {
-      const slug = (event.currentTarget as HTMLElement).dataset.view;
-      if (slug) navigate(`/viewer/${slug}`);
+      wireInteractions();
+      if (signedIn) {
+        cleanupImport = wireImportGameButton(container);
+      }
     };
 
-    const onEdit = (event: Event) => {
-      const slug = (event.currentTarget as HTMLElement).dataset.edit;
-      if (slug) navigate(`/editor/${slug}`);
-    };
-
-    container.querySelector('#create-game')?.addEventListener('click', onCreate);
-    container.querySelectorAll('[data-view]').forEach((button) => {
-      button.addEventListener('click', onView);
-    });
-    container.querySelectorAll('[data-edit]').forEach((button) => {
-      button.addEventListener('click', onEdit);
-    });
-
-    const cleanupCollapsible = wireCollapsiblePanels(container);
-    const cleanupImport = signedIn ? wireImportGameButton(container) : () => {};
+    paint();
 
     return () => {
       cleanupCollapsible();
       cleanupImport();
-      container.querySelector('#create-game')?.removeEventListener('click', onCreate);
-      container.querySelectorAll('[data-view]').forEach((button) => {
-        button.removeEventListener('click', onView);
-      });
-      container.querySelectorAll('[data-edit]').forEach((button) => {
-        button.removeEventListener('click', onEdit);
-      });
     };
   } catch (error) {
     container.innerHTML = `
@@ -181,12 +507,4 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
     `;
     return () => {};
   }
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
 }

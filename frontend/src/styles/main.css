@@ -428,6 +428,40 @@
     @apply w-full sm:w-auto;
   }
 
+  .library-add-folder {
+    @apply flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center;
+  }
+
+  .library-add-folder .input {
+    @apply min-w-0 sm:w-48;
+  }
+
+  .library-folder-list {
+    @apply min-w-0;
+  }
+
+  .library-folder-panel.collapsible-panel .collapsible-panel-title {
+    @apply flex items-center gap-2;
+  }
+
+  .library-folder-title {
+    @apply inline-flex min-w-0 items-center gap-2;
+  }
+
+  .library-folder-icon {
+    @apply shrink-0 opacity-70;
+  }
+
+  .library-folder-count {
+    @apply rounded-full px-2 py-0.5 text-xs font-medium;
+    color: rgb(var(--text-muted));
+    background-color: rgb(var(--surface-muted));
+  }
+
+  .library-game-grid {
+    @apply grid gap-4 sm:grid-cols-2 lg:grid-cols-3;
+  }
+
   .settings-section-title {
     @apply mb-1 text-lg font-semibold;
     color: rgb(var(--text-heading));
@@ -596,15 +630,19 @@
   }
 
   .markdown-editor {
-    @apply overflow-hidden rounded-lg border;
+    @apply rounded-lg border;
     border-color: rgb(var(--border-subtle));
     background-color: rgb(var(--editor-bg));
   }
 
   .markdown-editor-toolbar {
-    @apply flex flex-wrap gap-1 border-b p-2;
+    @apply sticky top-20 z-10 flex flex-wrap gap-1 rounded-t-lg border-b p-2 backdrop-blur;
     border-color: rgb(var(--border));
-    background-color: rgb(var(--surface-muted) / 0.65);
+    background-color: rgb(var(--surface-muted) / 0.92);
+  }
+
+  .markdown-editor-host {
+    @apply overflow-hidden rounded-b-lg;
   }
 
   .markdown-toolbar-btn {
@@ -1751,6 +1789,7 @@
 
   .viewer-content-panel.collapsible-panel {
     @apply min-w-0 flex-1 w-full lg:w-[80%];
+    scroll-margin-top: 5rem;
   }
 
   .viewer-content-panel.collapsible-panel .collapsible-panel-body {

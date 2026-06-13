@@ -533,6 +533,10 @@ export function mountMarkdownEditor(
       });
     },
     focus: () => view.focus(),
+    focusForEditing: () => {
+      view.contentDOM.focus({ preventScroll: true });
+      container.scrollIntoView({ block: 'nearest' });
+    },
     destroy: () => {
       view.dom.removeEventListener('blur', rememberSelection);
       view.dom.removeEventListener('mousedown', clearPendingInsertSelection);

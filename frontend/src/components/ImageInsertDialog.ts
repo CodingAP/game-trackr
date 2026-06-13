@@ -1,5 +1,5 @@
 import { AuthRequiredError, fetchGameImages, uploadGameImage, uploadGameImageFromUrl } from '../api/client.js';
-import { buildImageSnippet } from '../markdown/images.js';
+import { buildImageSnippet, importImageSourceFromUrl } from '../markdown/images.js';
 import { isVideoUrl } from '../markdown/media.js';
 import { getLibraryEntry, type ImageLibraryData } from '../markdown/imageLibrary.js';
 import type { UploadedImage } from '../types/index.js';
@@ -113,6 +113,15 @@ async function openImageInsertDialog(options: {
               />
               <button type="button" class="btn-secondary" data-action="import-url">${iconLabel('link', 'Import')}</button>
             </div>
+            <label class="block mt-2">
+              <span class="label">Alt text</span>
+              <input
+                type="text"
+                data-field="import-alt"
+                class="input"
+                placeholder="Optional — defaults to filename"
+              />
+            </label>
             <p class="hint mt-1">Downloads the file to your journal after verifying it is a supported image or video.</p>
           </div>
           <p class="hint mb-3">Set viewport per embed after inserting by clicking the media badge in the editor.</p>
@@ -147,6 +156,7 @@ async function openImageInsertDialog(options: {
   const form = overlay.querySelector('#image-upload-form') as HTMLFormElement;
   const statusEl = overlay.querySelector('#image-upload-status') as HTMLElement;
   const importUrlInput = overlay.querySelector('[data-field="import-url"]') as HTMLInputElement;
+  const importAltInput = overlay.querySelector('[data-field="import-alt"]') as HTMLInputElement;
 
   let images: UploadedImage[] = [];
 
@@ -216,8 +226,11 @@ async function openImageInsertDialog(options: {
 
     try {
       const uploaded = await uploadGameImageFromUrl(options.slug, remoteUrl);
+      const source = importImageSourceFromUrl(remoteUrl);
+      const alt = importAltInput?.value.trim() || uploaded.filename;
       const snippet = buildSnippetForImage(uploaded, {
-        alt: uploaded.filename,
+        alt,
+        source,
       }, options.getImageLibrary?.());
       insertSnippet(snippet);
       await loadImages();

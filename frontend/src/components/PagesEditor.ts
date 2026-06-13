@@ -59,6 +59,9 @@ export function mountPagesEditor(
 
   const loadActivePage = () => {
     editor.setValue(contents[activePageId] ?? '', true);
+    queueMicrotask(() => {
+      editor.focusForEditing();
+    });
   };
 
   const commitRename = (pageId: string, value: string) => {

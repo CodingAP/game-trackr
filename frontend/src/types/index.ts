@@ -173,6 +173,7 @@ export interface ImageViewportSettings {
   width: number;
   height: number;
   scaleToFit: boolean;
+  maintainAspectRatio: boolean;
 }
 
 export type ViewName = 'library' | 'editor' | 'viewer' | 'settings';

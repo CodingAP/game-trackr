@@ -11,5 +11,6 @@ export interface MarkdownEditorHandle {
   setEmbedConfig(config: MarkdownEmbedConfig): void;
   setEmbedContext(context: MarkdownEmbedContext): void;
   focus(): void;
+  focusForEditing(): void;
   destroy(): void;
 }

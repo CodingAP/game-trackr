@@ -21,6 +21,7 @@ export function mountProgressBarsEditor(
   initial: ProgressBarsData,
   options: {
     onProgressBarIdChange?: (oldId: string, newId: string) => void;
+    onProgressBarsChanged?: () => void;
   } = {},
 ): {
   getData: () => ProgressBarsData;
@@ -133,6 +134,7 @@ export function mountProgressBarsEditor(
       },
     });
     cleanupSearch = search.cleanup;
+    options.onProgressBarsChanged?.();
   };
 
   const wireStaticActions = () => {
