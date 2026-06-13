@@ -382,7 +382,8 @@ export function mountCheckboxConnectionsEditor(
   const isEditingDetail = (): boolean => {
     const active = document.activeElement;
     if (!active || !detailHost.contains(active)) return false;
-    return active.matches('input, select, textarea');
+    if (active instanceof HTMLSelectElement) return false;
+    return active.matches('input:not([type="checkbox"]), textarea');
   };
 
   const render = () => {
