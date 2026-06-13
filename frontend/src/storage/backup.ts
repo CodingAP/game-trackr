@@ -1,10 +1,11 @@
-import { applyTheme, getTheme } from './settings.js';
+import { applyTheme, getHideImages, getTheme, applyHideImages } from './settings.js';
 
 export const LOCAL_STORAGE_KEYS = [
   'game-tracking:progress',
   'game-tracking:playtime',
   'game-tracking:notes',
   'game-tracking:theme',
+  'game-tracking:hide-images',
   'game-tracking:image-viewport',
   'game-tracking:library-folders',
 ] as const;
@@ -118,6 +119,10 @@ export function importLocalData(json: string): string[] {
     applyTheme(getTheme());
   }
 
+  if (importedKeys.includes('game-tracking:hide-images')) {
+    applyHideImages(getHideImages());
+  }
+
   return importedKeys;
 }
 
@@ -138,6 +143,7 @@ export function describeBackupContents(keys: string[]): string {
     'game-tracking:playtime': 'playtime logs',
     'game-tracking:notes': 'notes',
     'game-tracking:theme': 'theme',
+    'game-tracking:hide-images': 'hide images preference',
     'game-tracking:image-viewport': 'media viewport settings',
     'game-tracking:library-folders': 'library folders',
   };

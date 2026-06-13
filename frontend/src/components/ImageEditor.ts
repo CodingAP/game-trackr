@@ -31,6 +31,7 @@ import {
   renderImageTable,
 } from './imageMediaUi.js';
 import { renderListSearchBar, wireListSearch } from './listSearch.js';
+import { readListScroll, restoreListScroll } from '../utils/scrollList.js';
 
 interface ImageFormDraft {
   alt: string;
@@ -290,6 +291,8 @@ export function mountImageEditor(
       selectedUrl = null;
     }
 
+    const listScrollTop = readListScroll(tableHost);
+
     tableHost.innerHTML = renderImageTable(uploadedImages, imageLibrary, {
       emptyMessage: 'No uploaded media yet. Add one on the right.',
       rowAction: 'select-image',
@@ -381,6 +384,7 @@ export function mountImageEditor(
     });
 
     listSearch.apply();
+    restoreListScroll(tableHost, listScrollTop);
   };
 
   const handleDeleteUpload = async (url: string, filename: string, embedCount: number) => {

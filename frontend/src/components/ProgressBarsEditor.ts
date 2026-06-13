@@ -3,6 +3,7 @@ import { createProgressBarFromName } from '../markdown/progressBars.js';
 import { SLUG_ID_PATTERN } from '../markdown/managedCheckboxes.js';
 import { renderEditorItemTable } from './editorLibraryUi.js';
 import { renderListSearchBar, wireListSearch } from './listSearch.js';
+import { readListScroll, restoreListScroll } from '../utils/scrollList.js';
 import { icon, iconLabel } from './icons.js';
 import type { ProgressBar, ProgressBarsData } from '../types/index.js';
 import type { MarkdownEditorHandle } from '../types/markdownEditor.js';
@@ -172,6 +173,8 @@ export function mountProgressBarsEditor(
       selectedId = null;
     }
 
+    const listScrollTop = readListScroll(tableHost);
+
     tableHost.innerHTML = renderEditorItemTable(
       bars.map((bar) => ({
         id: bar.id,
@@ -207,6 +210,7 @@ export function mountProgressBarsEditor(
     });
     cleanupSearch = search.cleanup;
     options.onProgressBarsChanged?.();
+    restoreListScroll(tableHost, listScrollTop);
   };
 
   const wireStaticActions = () => {

@@ -370,7 +370,7 @@
   }
 
   .panel {
-    @apply rounded-xl border p-4 sm:p-5;
+    @apply rounded-xl border p-4 sm:p-5 backdrop-blur-md;
     border-color: rgb(var(--border));
     background-color: rgb(var(--surface) / 0.7);
   }
@@ -614,6 +614,15 @@
     @apply opacity-50;
   }
 
+  :root[data-hide-images] .markdown-body .image-figure,
+  :root[data-hide-images] .markdown-body .media-figure,
+  :root[data-hide-images] .markdown-body img,
+  :root[data-hide-images] .game-map-body,
+  :root[data-hide-images] .game-info-cover,
+  :root[data-hide-images] .library-game-cover {
+    display: none !important;
+  }
+
   .image-edit-preview {
     @apply h-16 w-16 shrink-0 rounded-lg border object-cover;
     border-color: rgb(var(--border));
@@ -779,10 +788,10 @@
   }
 
   .editor-tab-help-popover {
-    @apply absolute right-0 top-full z-30 mt-2 rounded-xl border p-4 pt-8 shadow-lg;
+    @apply absolute right-0 top-full z-30 mt-2 rounded-xl border p-4 pt-8 shadow-lg backdrop-blur-md;
     width: min(20rem, calc(100vw - 2rem));
     border-color: rgb(var(--border-subtle));
-    background-color: rgb(var(--surface));
+    background-color: rgb(var(--surface) / 0.85);
   }
 
   .editor-tab-help-content {
@@ -1135,6 +1144,12 @@
 
   .embed-edit-option:hover {
     border-color: rgb(var(--accent) / 0.35);
+    background-color: rgb(var(--accent) / 0.1);
+    color: rgb(var(--text-heading));
+  }
+
+  .embed-edit-option.is-selected {
+    border-color: rgb(var(--accent) / 0.45);
     background-color: rgb(var(--accent) / 0.1);
     color: rgb(var(--text-heading));
   }

@@ -4,6 +4,7 @@ import { applyFavicon } from '../utils/favicon.js';
 
 const IMAGE_STORAGE_KEY = 'game-tracking:image-viewport';
 const THEME_STORAGE_KEY = 'game-tracking:theme';
+const HIDE_IMAGES_STORAGE_KEY = 'game-tracking:hide-images';
 
 const IMAGE_DEFAULTS: ImageViewportSettings = {
   enabled: false,
@@ -65,6 +66,29 @@ export function applyTheme(theme: ThemeId): void {
 
 export function initTheme(): void {
   applyTheme(getTheme());
+}
+
+export function getHideImages(): boolean {
+  return localStorage.getItem(HIDE_IMAGES_STORAGE_KEY) === 'true';
+}
+
+export function saveHideImages(hide: boolean): boolean {
+  localStorage.setItem(HIDE_IMAGES_STORAGE_KEY, hide ? 'true' : 'false');
+  applyHideImages(hide);
+  return hide;
+}
+
+export function applyHideImages(hide: boolean): void {
+  if (hide) {
+    document.documentElement.dataset.hideImages = 'true';
+    return;
+  }
+
+  delete document.documentElement.dataset.hideImages;
+}
+
+export function initHideImages(): void {
+  applyHideImages(getHideImages());
 }
 
 export function formatViewportTitle(

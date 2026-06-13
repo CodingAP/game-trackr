@@ -1,5 +1,6 @@
 import { renderEditorItemTable } from './editorLibraryUi.js';
 import { renderListSearchBar, wireListSearch } from './listSearch.js';
+import { readListScroll, restoreListScroll } from '../utils/scrollList.js';
 import {
   buildCheckboxMarker,
   inferCheckboxParentsFromJournal,
@@ -397,6 +398,8 @@ export function mountCheckboxConnectionsEditor(
       selectedId = null;
     }
 
+    const listScrollTop = readListScroll(tableHost);
+
     tableHost.innerHTML = renderEditorItemTable(
       checkboxes.map((checkbox) => ({
         id: checkbox.id,
@@ -438,6 +441,7 @@ export function mountCheckboxConnectionsEditor(
       itemSelector: '[data-search-text]',
     });
     cleanupSearch = search.cleanup;
+    restoreListScroll(tableHost, listScrollTop);
   };
 
   const wireStaticActions = () => {

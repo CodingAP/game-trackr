@@ -1,4 +1,4 @@
-import { buildMapMarker } from '../markdown/gameMaps.js';
+import { buildMapMarker, resolveMap } from '../markdown/gameMaps.js';
 import { buildProgressBarMarker, resolveProgressBar } from '../markdown/completionProgress.js';
 import { upsertProgressBarByName } from '../markdown/progressBars.js';
 import {
@@ -29,7 +29,10 @@ import type { EmbedApplyFn, EmbedEditTarget } from './markdownEmbedExtension.js'
 import type { MarkdownEmbedContext } from './markdownEmbedExtension.js';
 import type { ManagedCheckbox } from '../types/index.js';
 import { renderListSearchBar, wireListSearch } from './listSearch.js';
+import { readListScroll, restoreListScroll } from '../utils/scrollList.js';
 import { icon, iconLabel } from './icons.js';
+
+let mapPickerScrollTop = 0;
 
 function escapeHtml(value: string): string {
   return value
@@ -66,6 +69,7 @@ function positionPopover(popover: HTMLElement, anchor: HTMLElement): void {
 function renderPickerList(
   items: Array<{ id: string; label: string; searchText: string; action: string }>,
   emptyMessage: string,
+  selectedId?: string,
 ): string {
   if (items.length === 0) {
     return `<p class="text-muted text-sm">${escapeHtml(emptyMessage)}</p>`;
@@ -79,10 +83,11 @@ function renderPickerList(
           (item) => `
             <button
               type="button"
-              class="embed-edit-option"
+              class="embed-edit-option${item.id === selectedId ? ' is-selected' : ''}"
               data-action="${item.action}"
               data-item-id="${escapeHtml(item.id)}"
               data-search-text="${escapeHtml(item.searchText)}"
+              aria-pressed="${item.id === selectedId ? 'true' : 'false'}"
             >
               ${escapeHtml(item.label)}
             </button>
@@ -257,7 +262,12 @@ export function openEmbedEditPopover(options: {
       searchText: `${map.name} ${map.id}`,
       action: 'pick-map',
     }));
-    body = renderPickerList(items, 'No maps defined yet. Add them in the Maps tab.');
+    const currentMap = resolveMap(context.maps, target.reference);
+    body = renderPickerList(
+      items,
+      'No maps defined yet. Add them in the Maps tab.',
+      currentMap?.id,
+    );
   } else {
     title = 'Edit media';
     const parsed = parseImageEmbedRaw(target.raw) ?? {
@@ -292,6 +302,9 @@ export function openEmbedEditPopover(options: {
   const close = () => {
     if (target.kind === 'progress') {
       applyProgressName();
+    }
+    if (target.kind === 'map') {
+      mapPickerScrollTop = readListScroll(popover);
     }
     cleanupAspectRatio();
     listSearch.cleanup();
@@ -544,6 +557,9 @@ export function openEmbedEditPopover(options: {
   window.addEventListener('resize', onReposition);
   requestAnimationFrame(() => {
     document.addEventListener('mousedown', onDocumentMouseDown);
+    if (target.kind === 'map') {
+      restoreListScroll(popover, mapPickerScrollTop);
+    }
   });
 
   return close;

@@ -5,13 +5,24 @@ import {
   exportLocalData,
   importLocalData,
 } from '../storage/backup.js';
-import { getTheme, saveTheme } from '../storage/settings.js';
+import { getTheme, getHideImages, saveHideImages, saveTheme } from '../storage/settings.js';
 import { THEME_OPTIONS } from '../types/index.js';
 import type { ThemeId } from '../types/index.js';
 import { iconLabel } from '../components/icons.js';
 
 export function renderSettings(container: HTMLElement): () => void {
   const currentTheme = getTheme();
+  const hideImages = getHideImages();
+
+  const displayContent = `
+    <p class="text-muted text-sm">Control how journals and game pages show media.</p>
+    <label class="settings-check mt-3">
+      <input type="checkbox" id="hide-images" ${hideImages ? 'checked' : ''} />
+      <span>Hide all images</span>
+    </label>
+    <p class="hint mt-2">Hides images and videos in journal pages, embedded maps, and game info cover art.</p>
+    <p id="display-status" class="text-muted text-sm mt-3"></p>
+  `;
 
   const themeContent = `
     <p class="text-muted text-sm">Choose a color theme for the app interface.</p>
@@ -72,16 +83,25 @@ export function renderSettings(container: HTMLElement): () => void {
         <p class="text-muted mt-1">Global preferences for GameTrackr.</p>
       </div>
 
+      ${renderCollapsiblePanel({ title: 'Display', className: 'mb-6', content: displayContent })}
       ${renderCollapsiblePanel({ title: 'Theme', className: 'mb-6', content: themeContent })}
       ${renderCollapsiblePanel({ title: 'Import / export', content: backupContent })}
     </div>
   `;
 
   const themeStatus = container.querySelector('#theme-status') as HTMLElement;
+  const displayStatus = container.querySelector('#display-status') as HTMLElement;
+  const hideImagesInput = container.querySelector('#hide-images') as HTMLInputElement;
   const importForm = container.querySelector('#import-data-form') as HTMLFormElement;
   const importFileInput = container.querySelector('#import-data-file') as HTMLInputElement;
   const backupStatus = container.querySelector('#backup-status') as HTMLElement;
   const exportButton = container.querySelector('#export-data') as HTMLButtonElement;
+
+  const onHideImagesChange = () => {
+    const hide = hideImagesInput.checked;
+    saveHideImages(hide);
+    displayStatus.textContent = hide ? 'Images are now hidden.' : 'Images are now shown.';
+  };
 
   const onThemeSelect = (event: Event) => {
     const button = event.currentTarget as HTMLButtonElement;
@@ -134,6 +154,7 @@ export function renderSettings(container: HTMLElement): () => void {
   container.querySelectorAll('[data-theme]').forEach((button) => {
     button.addEventListener('click', onThemeSelect);
   });
+  hideImagesInput.addEventListener('change', onHideImagesChange);
   exportButton.addEventListener('click', onExportData);
   importForm.addEventListener('submit', onImportData);
 
@@ -145,6 +166,7 @@ export function renderSettings(container: HTMLElement): () => void {
       button.removeEventListener('click', onThemeSelect);
     });
     exportButton.removeEventListener('click', onExportData);
+    hideImagesInput.removeEventListener('change', onHideImagesChange);
     importForm.removeEventListener('submit', onImportData);
   };
 }
