@@ -1,4 +1,5 @@
 import type { GamePlaytime, PlaytimeEntry } from '../types/index.js';
+import { notifyLocalDataChanged } from './localDataEvents.js';
 
 const STORAGE_KEY = 'game-tracking:playtime';
 
@@ -14,6 +15,7 @@ function readAll(): GamePlaytime[] {
 
 function writeAll(records: GamePlaytime[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  notifyLocalDataChanged();
 }
 
 export function getPlaytime(gameSlug: string): GamePlaytime {

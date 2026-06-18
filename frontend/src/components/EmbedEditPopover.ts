@@ -1,10 +1,14 @@
-import { buildMapMarker, resolveMap } from '../markdown/gameMaps.js';
+import {
+  buildMapMarker,
+  parseMapMarkerRaw,
+  resolveMap,
+  resolveMapEmbedLayout,
+} from '../markdown/gameMaps.js';
 import { buildProgressBarMarker, resolveProgressBar } from '../markdown/completionProgress.js';
 import { upsertProgressBarByName } from '../markdown/progressBars.js';
 import {
   buildCheckboxLine,
   formatManagedCheckboxLabel,
-  SLUG_ID_PATTERN,
   slugifyCheckboxId,
 } from '../markdown/managedCheckboxes.js';
 import {
@@ -27,7 +31,7 @@ import {
 import { getLibraryEntry, type ImageLibraryData } from '../markdown/imageLibrary.js';
 import type { EmbedApplyFn, EmbedEditTarget } from './markdownEmbedExtension.js';
 import type { MarkdownEmbedContext } from './markdownEmbedExtension.js';
-import type { ManagedCheckbox } from '../types/index.js';
+import type { ManagedCheckbox, MapScrollPosition, MapViewport } from '../types/index.js';
 import { renderListSearchBar, wireListSearch } from './listSearch.js';
 import { readListScroll, restoreListScroll } from '../utils/scrollList.js';
 import { icon, iconLabel } from './icons.js';
@@ -98,6 +102,70 @@ function renderPickerList(
   `;
 }
 
+function readMapEmbedLayoutOptions(form: HTMLElement): {
+  viewport: MapViewport;
+  start: MapScrollPosition;
+} {
+  const readDimension = (selector: string, fallback: number, min: number) => {
+    const value = Number((form.querySelector(selector) as HTMLInputElement | null)?.value);
+    return Number.isFinite(value) ? Math.max(min, Math.round(value)) : fallback;
+  };
+
+  return {
+    viewport: {
+      width: readDimension('[data-field="map-width"]', 800, 100),
+      height: readDimension('[data-field="map-height"]', 600, 100),
+    },
+    start: {
+      x: readDimension('[data-field="map-start-x"]', 0, 0),
+      y: readDimension('[data-field="map-start-y"]', 0, 0),
+    },
+  };
+}
+
+function renderMapEditForm(
+  context: MarkdownEmbedContext,
+  selectedMapId: string | null,
+  layout: { viewport: MapViewport; start: MapScrollPosition },
+): string {
+  const items = context.maps.map((map) => ({
+    id: map.id,
+    label: map.name.trim() || 'Untitled map',
+    searchText: `${map.name} ${map.id}`,
+    action: 'pick-map',
+  }));
+
+  return `
+    <div class="embed-edit-section space-y-3" data-map-form>
+      <input type="hidden" data-field="selected-map-id" value="${escapeHtml(selectedMapId ?? '')}" />
+      <p class="label">Map</p>
+      ${renderPickerList(items, 'No maps defined yet. Add them in the Maps tab.', selectedMapId ?? undefined)}
+      <p class="hint">Viewport size and starting scroll position are specific to this embed.</p>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <label class="block">
+          <span class="label">Viewport width (px)</span>
+          <input type="number" data-field="map-width" class="input" min="100" step="1" value="${layout.viewport.width}" />
+        </label>
+        <label class="block">
+          <span class="label">Viewport height (px)</span>
+          <input type="number" data-field="map-height" class="input" min="100" step="1" value="${layout.viewport.height}" />
+        </label>
+        <label class="block">
+          <span class="label">Start X (px)</span>
+          <input type="number" data-field="map-start-x" class="input" min="0" step="1" value="${layout.start.x}" />
+        </label>
+        <label class="block">
+          <span class="label">Start Y (px)</span>
+          <input type="number" data-field="map-start-y" class="input" min="0" step="1" value="${layout.start.y}" />
+        </label>
+      </div>
+      <div class="flex flex-wrap gap-2 pt-1">
+        <button type="button" class="btn-primary" data-action="apply-map">${iconLabel('save', 'Apply')}</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderEditCheckboxForm(target: EmbedEditTarget, context: MarkdownEmbedContext): string {
   const checkbox = context.checkboxes.find((entry) => entry.id === target.reference);
   const label = target.lineLabel ?? checkbox?.label ?? '';
@@ -105,29 +173,17 @@ function renderEditCheckboxForm(target: EmbedEditTarget, context: MarkdownEmbedC
     <div class="embed-edit-section">
       <p class="label mb-2">Edit this checkbox</p>
       <div class="embed-edit-form">
-        <div class="embed-edit-form-fields embed-edit-form-fields-2">
-          <label class="block min-w-0">
-            <span class="label">Label</span>
-            <input
-              type="text"
-              data-field="edit-checkbox-label"
-              class="input"
-              value="${escapeHtml(label)}"
-              placeholder="e.g. Defeat the boss"
-            />
-          </label>
-          <label class="block min-w-0">
-            <span class="label">Checkbox id</span>
-            <input
-              type="text"
-              data-field="edit-checkbox-id"
-              class="input"
-              value="${escapeHtml(target.reference)}"
-              pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-            />
-          </label>
-        </div>
-        <p class="hint">Lowercase letters, numbers, and hyphens only.</p>
+        <label class="block mb-3">
+          <span class="label">Label</span>
+          <input
+            type="text"
+            data-field="edit-checkbox-label"
+            class="input"
+            value="${escapeHtml(label)}"
+            placeholder="e.g. Defeat the boss"
+          />
+        </label>
+        <p class="hint mb-3">Marker id: <code>[[cb:${escapeHtml(target.reference)}]]</code> (updates when you change the label)</p>
         <p data-role="edit-checkbox-error" class="text-sm text-red-400 hidden"></p>
         <div class="embed-edit-form-actions">
           <button type="button" class="btn-primary" data-action="save-checkbox">${iconLabel('save', 'Apply')}</button>
@@ -233,9 +289,9 @@ export function openEmbedEditPopover(options: {
   imageLibrary?: ImageLibraryData;
   onApply: EmbedApplyFn;
   onRegisterCheckbox?: (checkbox: ManagedCheckbox) => void;
-  onUpdateCheckbox?: (id: string, updates: { id?: string; label?: string }) => boolean;
+  onUpdateCheckbox?: (id: string, updates: { id?: string; label?: string }) => string | false;
   onRegisterProgressBar?: (bar: import('../types/index.js').ProgressBar) => void;
-  onUpdateProgressBar?: (id: string, updates: { name: string }) => void;
+  onUpdateProgressBar?: (id: string, updates: { name: string }) => string | false | void;
   onContextChanged?: () => void;
 }): () => void {
   const { anchor, target, context, onApply } = options;
@@ -255,19 +311,11 @@ export function openEmbedEditPopover(options: {
     const resolvedBar = resolveProgressBar(context.progressBars, target.reference);
     body = renderProgressEditForm(resolvedBar?.name ?? target.reference);
   } else if (target.kind === 'map') {
-    title = 'Change map';
-    const items = context.maps.map((map) => ({
-      id: map.id,
-      label: map.name.trim() || 'Untitled map',
-      searchText: `${map.name} ${map.id}`,
-      action: 'pick-map',
-    }));
-    const currentMap = resolveMap(context.maps, target.reference);
-    body = renderPickerList(
-      items,
-      'No maps defined yet. Add them in the Maps tab.',
-      currentMap?.id,
-    );
+    title = 'Edit map';
+    const parsed = parseMapMarkerRaw(target.raw);
+    const currentMap = resolveMap(context.maps, parsed.mapRef);
+    const layout = resolveMapEmbedLayout(parsed, currentMap);
+    body = renderMapEditForm(context, currentMap?.id ?? parsed.mapRef, layout);
   } else {
     title = 'Edit media';
     const parsed = parseImageEmbedRaw(target.raw) ?? {
@@ -345,26 +393,36 @@ export function openEmbedEditPopover(options: {
     onApply(`[[cb:${id}]]`);
   };
 
-  const wireCheckboxIdSuggestion = (
-    labelField: string,
-    idField: string,
-    existingIds: Set<string>,
-  ) => {
-    const labelInput = popover.querySelector(`[data-field="${labelField}"]`) as HTMLInputElement | null;
-    const idInput = popover.querySelector(`[data-field="${idField}"]`) as HTMLInputElement | null;
-    if (!labelInput || !idInput) return;
+  popover.querySelector('[data-action="save-checkbox"]')?.addEventListener('click', () => {
+    const labelInput = popover.querySelector('[data-field="edit-checkbox-label"]') as HTMLInputElement | null;
+    const label = labelInput?.value.trim() ?? '';
+    if (!label) return;
 
-    let idTouched = false;
-    idInput.addEventListener('input', () => {
-      idTouched = true;
-    });
-    labelInput.addEventListener('blur', () => {
-      if (idTouched || idInput.value.trim()) return;
-      const label = labelInput.value.trim();
-      if (!label) return;
-      idInput.value = slugifyCheckboxId(label, existingIds);
-    });
-  };
+    const oldId = target.reference;
+    const existing = context.checkboxes.find((checkbox) => checkbox.id === oldId);
+    let id = oldId;
+
+    if (existing) {
+      const newId = options.onUpdateCheckbox?.(oldId, { label });
+      if (newId === false) {
+        showCheckboxError('Could not update checkbox.', 'edit-checkbox-error');
+        return;
+      }
+      id = newId ?? oldId;
+    } else {
+      id = slugifyCheckboxId(label, new Set(context.checkboxes.map((checkbox) => checkbox.id)));
+      options.onRegisterCheckbox?.({
+        id,
+        label,
+        parentId: null,
+        tagIds: [],
+      });
+    }
+
+    applyCheckboxLine(id, label);
+    options.onContextChanged?.();
+    close();
+  });
 
   popover.querySelector('[data-action="close"]')?.addEventListener('click', close);
 
@@ -372,46 +430,6 @@ export function openEmbedEditPopover(options: {
     const confirmed = window.confirm('Remove this embed from the page?');
     if (!confirmed) return;
     onApply('');
-    close();
-  });
-
-  popover.querySelector('[data-action="save-checkbox"]')?.addEventListener('click', () => {
-    const labelInput = popover.querySelector('[data-field="edit-checkbox-label"]') as HTMLInputElement | null;
-    const idInput = popover.querySelector('[data-field="edit-checkbox-id"]') as HTMLInputElement | null;
-    const label = labelInput?.value.trim() ?? '';
-    const newId = idInput?.value.trim() ?? '';
-    if (!label || !newId) return;
-
-    if (!SLUG_ID_PATTERN.test(newId)) {
-      showCheckboxError('Checkbox id must use lowercase letters, numbers, and hyphens.', 'edit-checkbox-error');
-      idInput?.focus();
-      return;
-    }
-
-    if (newId !== target.reference && context.checkboxes.some((checkbox) => checkbox.id === newId)) {
-      showCheckboxError('That checkbox id is already in use.', 'edit-checkbox-error');
-      idInput?.focus();
-      return;
-    }
-
-    const existing = context.checkboxes.find((checkbox) => checkbox.id === target.reference);
-    if (existing) {
-      const updated = options.onUpdateCheckbox?.(target.reference, { id: newId, label });
-      if (updated === false) {
-        showCheckboxError('Could not update checkbox.', 'edit-checkbox-error');
-        return;
-      }
-    } else {
-      options.onRegisterCheckbox?.({
-        id: newId,
-        label,
-        parentId: null,
-        tagIds: [],
-      });
-    }
-
-    applyCheckboxLine(newId, label);
-    options.onContextChanged?.();
     close();
   });
 
@@ -446,11 +464,26 @@ export function openEmbedEditPopover(options: {
   popover.querySelectorAll('[data-action="pick-map"]').forEach((button) => {
     button.addEventListener('click', () => {
       const mapId = (button as HTMLElement).dataset.itemId;
-      const map = context.maps.find((entry) => entry.id === mapId);
-      if (!map) return;
-      onApply(buildMapMarker(map));
-      close();
+      if (!mapId) return;
+      const selectedInput = popover.querySelector('[data-field="selected-map-id"]') as HTMLInputElement | null;
+      if (selectedInput) selectedInput.value = mapId;
+      popover.querySelectorAll('[data-action="pick-map"]').forEach((entry) => {
+        const isSelected = (entry as HTMLElement).dataset.itemId === mapId;
+        entry.classList.toggle('is-selected', isSelected);
+        entry.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+      });
     });
+  });
+
+  popover.querySelector('[data-action="apply-map"]')?.addEventListener('click', () => {
+    const form = popover.querySelector('[data-map-form]') as HTMLElement | null;
+    const selectedInput = popover.querySelector('[data-field="selected-map-id"]') as HTMLInputElement | null;
+    const mapId = selectedInput?.value.trim();
+    const map = context.maps.find((entry) => entry.id === mapId);
+    if (!form || !map) return;
+    const layout = readMapEmbedLayoutOptions(form);
+    onApply(buildMapMarker(map, layout));
+    close();
   });
 
   const applyImageForm = () => {
@@ -546,12 +579,6 @@ export function openEmbedEditPopover(options: {
       refreshImagePreview();
     });
   }
-
-  wireCheckboxIdSuggestion(
-    'edit-checkbox-label',
-    'edit-checkbox-id',
-    new Set(context.checkboxes.map((checkbox) => checkbox.id)),
-  );
 
   document.addEventListener('keydown', onKeyDown);
   window.addEventListener('resize', onReposition);

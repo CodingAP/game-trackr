@@ -66,6 +66,7 @@ export interface MarkdownEditorOptions {
   onOpenImagePicker?: () => void;
   onOpenProgressPicker?: () => void;
   onOpenCheckboxPicker?: () => void;
+  onOpenMapPicker?: () => void;
   onEditEmbed?: MarkdownEmbedConfig['onEditEmbed'];
 }
 
@@ -79,6 +80,7 @@ type ToolbarAction =
   | 'link'
   | 'checkbox'
   | 'progress'
+  | 'map'
   | 'image';
 
 const toolbarButtons: Array<{
@@ -97,6 +99,7 @@ const toolbarButtons: Array<{
   { action: 'link', label: 'Link', title: 'Link', shortcut: 'Mod-k' },
   { action: 'checkbox', label: 'Checkbox', title: 'Checkbox', shortcut: 'Mod-Shift-c' },
   { action: 'progress', label: 'Progress', title: 'Insert progress bar', shortcut: 'Mod-Shift-b' },
+  { action: 'map', label: 'Map', title: 'Insert map', shortcut: 'Mod-Shift-m' },
   { action: 'image', label: 'Media', title: 'Insert media', shortcut: 'Mod-Shift-i' },
 ];
 
@@ -230,7 +233,7 @@ function insertLineInView(
   return { from, to };
 }
 
-const PICKER_TOOLBAR_ACTIONS = new Set<ToolbarAction>(['checkbox', 'progress', 'image']);
+const PICKER_TOOLBAR_ACTIONS = new Set<ToolbarAction>(['checkbox', 'progress', 'map', 'image']);
 
 function opensPicker(action: ToolbarAction): boolean {
   return PICKER_TOOLBAR_ACTIONS.has(action);
@@ -315,6 +318,13 @@ export function mountMarkdownEditor(
           insertLineInView(view, '[[pb:progress-bar-id]]', getInsertSelection());
         }
         return true;
+      case 'map':
+        if (options.onOpenMapPicker) {
+          options.onOpenMapPicker();
+        } else {
+          insertLineInView(view, '[[map:map-id]]', getInsertSelection());
+        }
+        return true;
       case 'image':
         if (options.onOpenImagePicker) {
           options.onOpenImagePicker();
@@ -355,6 +365,7 @@ export function mountMarkdownEditor(
       bind('Mod-Alt-3', 'h3'),
       bind('Mod-Shift-c', 'checkbox'),
       bind('Mod-Shift-b', 'progress'),
+      bind('Mod-Shift-m', 'map'),
       bind('Mod-Shift-i', 'image'),
     ];
   };

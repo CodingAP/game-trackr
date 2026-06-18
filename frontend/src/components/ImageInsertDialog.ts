@@ -1,21 +1,22 @@
-import { AuthRequiredError, fetchGameImages, uploadGameImage, uploadGameImageFromUrl } from '../api/client.js';
+import { fetchGameImages } from '../api/client.js';
 import { buildImageSnippet, importImageSourceFromUrl } from '../markdown/images.js';
 import { getLibraryEntry, type ImageLibraryData } from '../markdown/imageLibrary.js';
 import type { UploadedImage } from '../types/index.js';
-import { requireAuth } from './AuthPrompt.js';
 import { renderHelpButton, wireEditorTabHelp } from './editorTabHelp.js';
 import {
   readMediaOptions,
   renderImageAddForm,
   renderImageTable,
+  wireImageAddForm,
 } from './imageMediaUi.js';
 import { renderListSearchBar, wireListSearch } from './listSearch.js';
 import { icon } from './icons.js';
 
 const IMAGE_INSERT_HELP = `
+  <p><strong>Adding media</strong> — Import a URL or upload a file on the right. Optional metadata fields apply to either method.</p>
+  <p><strong>Optional metadata</strong> — Alt text defaults to the filename; source URL defaults to the import URL when importing.</p>
   <p><strong>Choosing media</strong> — Click a row in the table to insert an uploaded file using the alt text and source fields on the right.</p>
   <p><strong>Viewport</strong> — Set viewport per embed after inserting by clicking the media badge in the editor.</p>
-  <p><strong>URL import</strong> — Downloads the file to your journal after verifying it is a supported image or video. If source fields are empty, the import URL is used as the source link.</p>
 `;
 
 function escapeHtml(value: string): string {
@@ -66,7 +67,6 @@ async function openImageInsertDialog(options: {
           </div>
         </section>
         <section class="image-insert-upload" aria-label="Add new media">
-          <p class="label mb-2">Add new media</p>
           ${renderImageAddForm({ formId: 'image-add-form' })}
         </section>
       </div>
@@ -74,13 +74,14 @@ async function openImageInsertDialog(options: {
   `;
 
   const listHost = overlay.querySelector('#image-picker-list') as HTMLElement;
-  const form = overlay.querySelector('#image-add-form') as HTMLFormElement;
+  const form = overlay.querySelector('[data-image-add-form]') as HTMLElement;
   const statusEl = overlay.querySelector('[data-role="upload-status"]') as HTMLElement;
   const importUrlInput = overlay.querySelector('[data-field="import-url"]') as HTMLInputElement;
 
   let images: UploadedImage[] = [];
 
   const close = () => {
+    cleanupAddForm();
     listSearch.cleanup();
     cleanupHelp();
     document.removeEventListener('keydown', onKeyDown);
@@ -137,70 +138,30 @@ async function openImageInsertDialog(options: {
     }
   };
 
+  const cleanupAddForm = wireImageAddForm({
+    root: form,
+    statusEl,
+    slug: options.slug,
+    onUpload: async ({ uploads, mediaOptions, remoteUrl }) => {
+      const uploaded = uploads[0];
+      const snippet = buildSnippetForImage(
+        uploaded,
+        mediaOptions,
+        options.getImageLibrary?.(),
+        remoteUrl && !mediaOptions.source ? importImageSourceFromUrl(remoteUrl) : undefined,
+      );
+      insertSnippet(snippet);
+      await loadImages();
+      options.onImagesChanged?.();
+    },
+  });
+
   overlay.querySelectorAll('[data-action="close"]').forEach((button) => {
     button.addEventListener('click', close);
   });
 
   overlay.addEventListener('click', (event) => {
     if (event.target === overlay) close();
-  });
-
-  overlay.querySelector('[data-action="import-url"]')?.addEventListener('click', async () => {
-    const remoteUrl = importUrlInput?.value.trim();
-    if (!remoteUrl) {
-      statusEl.textContent = 'Enter a media URL to import.';
-      importUrlInput?.focus();
-      return;
-    }
-
-    statusEl.textContent = 'Downloading media...';
-
-    try {
-      const uploaded = await uploadGameImageFromUrl(options.slug, remoteUrl);
-      const mediaOptions = readMediaOptions(form);
-      const snippet = buildSnippetForImage(
-        uploaded,
-        mediaOptions,
-        options.getImageLibrary?.(),
-        mediaOptions.source ? undefined : importImageSourceFromUrl(remoteUrl),
-      );
-      insertSnippet(snippet);
-      await loadImages();
-      options.onImagesChanged?.();
-    } catch (error) {
-      if (error instanceof AuthRequiredError && (await requireAuth())) {
-        overlay.querySelector('[data-action="import-url"]')?.dispatchEvent(new Event('click'));
-        return;
-      }
-      statusEl.textContent = error instanceof Error ? error.message : 'Import failed';
-    }
-  });
-
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const fileInput = form.querySelector('[data-field="file"]') as HTMLInputElement;
-    const file = fileInput.files?.[0];
-    if (!file) {
-      statusEl.textContent = 'Choose a media file to upload.';
-      fileInput.focus();
-      return;
-    }
-
-    statusEl.textContent = 'Uploading...';
-
-    try {
-      const uploaded = await uploadGameImage(options.slug, file);
-      const snippet = buildSnippetForImage(uploaded, readMediaOptions(form), options.getImageLibrary?.());
-      insertSnippet(snippet);
-      await loadImages();
-      options.onImagesChanged?.();
-    } catch (error) {
-      if (error instanceof AuthRequiredError && (await requireAuth())) {
-        form.dispatchEvent(new Event('submit'));
-        return;
-      }
-      statusEl.textContent = error instanceof Error ? error.message : 'Upload failed';
-    }
   });
 
   const listSearch = wireListSearch(overlay, {

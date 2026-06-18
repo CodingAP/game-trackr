@@ -63,8 +63,6 @@ export interface GameMap {
   name: string;
   imageUrl: string;
   imageFilename: string;
-  viewport: MapViewport;
-  start: MapScrollPosition;
   pointTypes: MapPointType[];
   points: MapPoint[];
 }
@@ -79,78 +77,6 @@ export interface EditorStateBody {
   completionTags: ProgressBarsData;
   maps: GameMapsData;
   imageLibrary: ImageLibraryData;
-}
-
-export type ThemeId =
-  | 'dark'
-  | 'light'
-  | 'midnight'
-  | 'forest'
-  | 'purple-dark'
-  | 'purple-light'
-  | 'red-dark'
-  | 'red-light';
-
-export interface ThemeOption {
-  id: ThemeId;
-  name: string;
-  description: string;
-  preview: [string, string, string];
-}
-
-export const THEME_OPTIONS: ThemeOption[] = [
-  {
-    id: 'dark',
-    name: 'Dark',
-    description: 'Slate background with emerald accents',
-    preview: ['#020617', '#0f172a', '#10b981'],
-  },
-  {
-    id: 'light',
-    name: 'Light',
-    description: 'Clean light background with emerald accents',
-    preview: ['#f8fafc', '#ffffff', '#059669'],
-  },
-  {
-    id: 'midnight',
-    name: 'Midnight',
-    description: 'Deep navy tones with sky blue accents',
-    preview: ['#080c18', '#0f172a', '#0ea5e9'],
-  },
-  {
-    id: 'forest',
-    name: 'Forest',
-    description: 'Dark green tones with bright green accents',
-    preview: ['#050f0a', '#0f1f14', '#22c55e'],
-  },
-  {
-    id: 'purple-dark',
-    name: 'Purple Dark',
-    description: 'Deep violet background with bright purple accents',
-    preview: ['#0f0a1a', '#181028', '#8b5cf6'],
-  },
-  {
-    id: 'purple-light',
-    name: 'Purple Light',
-    description: 'Soft lavender background with violet accents',
-    preview: ['#faf5ff', '#ffffff', '#7c3aed'],
-  },
-  {
-    id: 'red-dark',
-    name: 'Red Dark',
-    description: 'Deep crimson background with bright red accents',
-    preview: ['#140808', '#1e0c0c', '#ef4444'],
-  },
-  {
-    id: 'red-light',
-    name: 'Red Light',
-    description: 'Warm blush background with red accents',
-    preview: ['#fff1f2', '#ffffff', '#dc2626'],
-  },
-];
-
-export function getThemeAccentColor(theme: ThemeId): string {
-  return THEME_OPTIONS.find((entry) => entry.id === theme)?.preview[2] ?? '#10b981';
 }
 
 export interface GameMeta {
@@ -305,10 +231,12 @@ export interface ImportGameRequest {
 export interface AuthSession {
   token: string;
   expiresAt: string;
+  username: string;
 }
 
 export interface AuthStatus {
   configured: boolean;
   authenticated: boolean;
   expiresAt?: string;
+  username?: string;
 }

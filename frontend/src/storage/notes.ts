@@ -1,4 +1,5 @@
 import type { GameNotes } from '../types/index.js';
+import { notifyLocalDataChanged } from './localDataEvents.js';
 
 const STORAGE_KEY = 'game-tracking:notes';
 
@@ -14,6 +15,7 @@ function readAll(): GameNotes[] {
 
 function writeAll(records: GameNotes[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  notifyLocalDataChanged();
 }
 
 export function getNotes(gameSlug: string): GameNotes {

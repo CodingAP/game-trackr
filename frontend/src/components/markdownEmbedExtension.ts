@@ -19,7 +19,7 @@ import {
   type ViewUpdate,
 } from '@codemirror/view';
 import { resolveProgressBar, TAG_PROGRESS_MARKER } from '../markdown/completionProgress.js';
-import { resolveMap } from '../markdown/gameMaps.js';
+import { MAP_MARKER, parseMapMarkerPayload, resolveMap, resolveMapEmbedLayout } from '../markdown/gameMaps.js';
 import { parseImageEmbedRaw } from '../markdown/imageDocument.js';
 import { parseViewportTitle } from '../markdown/images.js';
 import {
@@ -80,7 +80,6 @@ interface EmbedMatch {
 
 const CHECKBOX_NEST_INDENT_REM = 1.5;
 
-const MAP_MARKER = /\[\[map:([^\]]+)\]\]/g;
 const IMAGE_MARKER = /!\[([^\]]*)\]\(([^\s)]+)(?:\s+"([^"]*)")?\)/g;
 const FIGURE_BLOCK =
   /<figure class="[^"]*(?:image-figure|media-figure)[^"]*">[\s\S]*?<\/figure>/g;
@@ -469,14 +468,20 @@ function findEmbeds(doc: string, context: MarkdownEmbedContext): EmbedMatch[] {
   for (const match of doc.matchAll(MAP_MARKER)) {
     const from = match.index ?? 0;
     if (overlapsRange(from, occupied)) continue;
-    const ref = match[1].trim();
+    const parsed = parseMapMarkerPayload(match[1], match[2]);
+    const ref = parsed.mapRef;
     const map = resolveMap(context.maps, ref);
     const mapName = map?.name.trim() || ref;
+    const layout = resolveMapEmbedLayout(parsed, map);
+    const displayLabel =
+      parsed.viewport || parsed.start
+        ? `${mapName} (${layout.viewport.width}×${layout.viewport.height})`
+        : mapName;
     matches.push({
       from: match.index ?? 0,
       to: (match.index ?? 0) + match[0].length,
       kind: 'map',
-      label: mapName,
+      label: displayLabel,
       missing: !map,
       title: map ? `Map: ${mapName}` : `Unknown map: ${ref}`,
       reference: ref,

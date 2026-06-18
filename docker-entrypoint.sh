@@ -2,20 +2,18 @@
 set -e
 
 DATA_DIR="/app/backend/data/games"
+ACCOUNTS_FILE="/app/backend/data/accounts.json"
 
-if [ -z "${ADMIN_PASSWORD:-}" ]; then
-  echo "ERROR: ADMIN_PASSWORD is not set inside the container."
+if [ ! -f "$ACCOUNTS_FILE" ]; then
+  echo "ERROR: No accounts configured inside the container."
   echo ""
-  echo "On the host, check your .env file next to docker-compose.yml:"
-  echo "  grep ADMIN_PASSWORD .env"
-  echo "  docker compose config | grep ADMIN_PASSWORD"
-  echo ""
-  echo "Then recreate the container (restart alone is not enough):"
-  echo "  docker compose down && docker compose up -d --build"
+  echo "Create backend/data/accounts.json (see backend/data/accounts.example.json):"
+  echo "  cp backend/data/accounts.example.json backend/data/accounts.json"
+  echo "  # edit backend/data/accounts.json with your username and password"
   exit 1
 fi
 
-mkdir -p "$DATA_DIR"
-chown -R node:node "$DATA_DIR"
+mkdir -p "$DATA_DIR" /app/backend/data/users
+chown -R node:node "$DATA_DIR" /app/backend/data/users
 
 exec su-exec node "$@"

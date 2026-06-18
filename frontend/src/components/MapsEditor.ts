@@ -2,23 +2,25 @@ import { AuthRequiredError, uploadGameImage } from '../api/client.js';
 import {
   buildMapMarker,
   defaultPointTypes,
-  getImagePercentFromClick,
   normalizeGameMap,
-  renderMapZoomControls,
-  resolvePointType,
-  wireMapZoom,
 } from '../markdown/gameMaps.js';
 import type {
   CheckboxConnectionsData,
   GameMap,
   GameMapsData,
-  ManagedCheckbox,
   MapPointType,
 } from '../types/index.js';
-import type { MarkdownEditorHandle } from '../types/markdownEditor.js';
 import { requireAuth } from './AuthPrompt.js';
-import { renderCollapsiblePanel, wireCollapsiblePanels } from './CollapsiblePanel.js';
+import { openMapPointsEditorDialog } from './MapPointsEditorDialog.js';
+import {
+  renderEditorItemTable,
+  renderEditorSplitLayout,
+  resolveEditorSelection,
+  wireEditorItemTable,
+  wireEditorItemTableRemove,
+} from './editorLibraryUi.js';
 import { renderListSearchBar, wireListSearch } from './listSearch.js';
+import { readListScroll, restoreListScroll } from '../utils/scrollList.js';
 import { icon, iconLabel } from './icons.js';
 
 const POINT_TYPE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
@@ -65,60 +67,22 @@ function slugifyPointTypeId(name: string, existing: Set<string>): string {
   return `${base}-${counter}`;
 }
 
-function defaultMap(existing: Set<string>): GameMap {
-  const name = 'New map';
+function createMapFromName(name: string, existing: GameMap[]): GameMap {
+  const trimmed = name.trim() || 'New map';
+  const existingIds = new Set(existing.map((entry) => entry.id));
   return {
-    id: slugifyMapId(name, existing),
-    name,
+    id: slugifyMapId(trimmed, existingIds),
+    name: trimmed,
     imageUrl: '',
     imageFilename: '',
-    viewport: { width: 800, height: 600 },
-    start: { x: 0, y: 0 },
     pointTypes: defaultPointTypes(),
     points: [],
   };
 }
 
-function readNumber(value: string, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 function normalizeColor(value: string, fallback: string): string {
   const trimmed = value.trim();
   return /^#[0-9a-fA-F]{6}$/.test(trimmed) ? trimmed : fallback;
-}
-
-function renderPointTypeOptions(map: GameMap, selectedTypeId: string | null | undefined): string {
-  return map.pointTypes
-    .map(
-      (type) => `
-        <option value="${escapeHtml(type.id)}"${selectedTypeId === type.id ? ' selected' : ''}>
-          ${escapeHtml(type.name.trim() || type.id)}
-        </option>
-      `,
-    )
-    .join('');
-}
-
-function renderCheckboxOptions(
-  checkboxes: ManagedCheckbox[],
-  selectedCheckboxId: string | null | undefined,
-): string {
-  return `
-    <option value="">None</option>
-    ${checkboxes
-      .map(
-        (checkbox) => `
-          <option value="${escapeHtml(checkbox.id)}"${
-            selectedCheckboxId === checkbox.id ? ' selected' : ''
-          }>
-            ${escapeHtml(checkbox.label.trim() || checkbox.id)}
-          </option>
-        `,
-      )
-      .join('')}
-  `;
 }
 
 function renderPointTypesEditor(map: GameMap): string {
@@ -170,53 +134,27 @@ function renderPointTypesEditor(map: GameMap): string {
   `;
 }
 
-function renderMapEditorBody(
-  map: GameMap,
-  selectedPointId: string | null,
-  checkboxes: ManagedCheckbox[],
-): string {
+function renderMapEditorBody(map: GameMap): string {
+  const pointsButtonLabel =
+    map.points.length === 0 ? 'Add points' : `Edit points (${map.points.length})`;
+
   return `
-    <div class="grid gap-3 sm:grid-cols-2 mb-3">
-      <label class="block">
-        <span class="label">Map name</span>
-        <input type="text" class="input" data-map-name="${map.id}" value="${escapeHtml(map.name)}" />
-      </label>
-      <label class="block">
-        <span class="label">Map id</span>
-        <input
-          type="text"
-          class="input"
-          data-map-id-field="${map.id}"
-          value="${escapeHtml(map.id)}"
-          pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-        />
-      </label>
-      <label class="block">
-        <span class="label">Viewport width (px)</span>
-        <input type="number" class="input" min="100" step="1" data-map-viewport-width="${map.id}" value="${map.viewport.width}" />
-      </label>
-      <label class="block">
-        <span class="label">Viewport height (px)</span>
-        <input type="number" class="input" min="100" step="1" data-map-viewport-height="${map.id}" value="${map.viewport.height}" />
-      </label>
-      <label class="block">
-        <span class="label">Start X (px)</span>
-        <input type="number" class="input" min="0" step="1" data-map-start-x="${map.id}" value="${map.start.x}" />
-      </label>
-      <label class="block">
-        <span class="label">Start Y (px)</span>
-        <input type="number" class="input" min="0" step="1" data-map-start-y="${map.id}" value="${map.start.y}" />
-      </label>
-    </div>
+    <label class="block mb-3">
+      <span class="label">Map name</span>
+      <input type="text" class="input" data-map-name="${map.id}" value="${escapeHtml(map.name)}" />
+    </label>
+    <p class="hint mb-3">Embed id: <code>${escapeHtml(buildMapMarker(map))}</code></p>
 
     <div class="map-editor-upload mb-3">
-      <span class="label">Base image</span>
-      <div class="flex flex-wrap items-center gap-3 mt-1">
-        <input type="file" accept="image/*" data-map-image-input="${map.id}" class="input file-input" />
-        <button type="button" class="btn-secondary text-xs" data-action="upload-map-image" data-map-id="${map.id}">
-          ${iconLabel('upload', 'Upload', 'ui-icon ui-icon-sm')}
-        </button>
-      </div>
+      <label class="block">
+        <span class="label">Base image</span>
+        <div class="media-add-input-row mt-1">
+          <input type="file" accept="image/*" data-map-image-input="${map.id}" class="input file-input" />
+          <button type="button" class="btn-secondary" data-action="upload-map-image" data-map-id="${map.id}">
+            ${iconLabel('upload', 'Upload', 'ui-icon ui-icon-sm')}
+          </button>
+        </div>
+      </label>
       ${
         map.imageUrl
           ? `<p class="hint mt-1 truncate">${escapeHtml(map.imageFilename || map.imageUrl)}</p>`
@@ -226,202 +164,112 @@ function renderMapEditorBody(
 
     ${renderPointTypesEditor(map)}
 
-    ${
-      map.imageUrl
-        ? `
-          <div class="map-editor-canvas-wrap mb-3">
-            <div
-              class="map-editor-frame"
-              style="width: min(100%, ${map.viewport.width}px); height: ${map.viewport.height}px;"
-            >
-              <div class="map-editor-viewport" data-map-viewport="${map.id}">
-                <div class="map-editor-stage">
-                  <img
-                    class="map-editor-image"
-                    src="${escapeHtml(map.imageUrl)}"
-                    alt=""
-                    draggable="false"
-                  />
-                  ${map.points
-                    .map((point) => {
-                      const pointType = resolvePointType(map, point.typeId);
-                      return `
-                        <button
-                          type="button"
-                          class="map-editor-point${selectedPointId === point.id ? ' is-selected' : ''}"
-                          style="left: ${point.x}%; top: ${point.y}%;"
-                          data-map-point="${map.id}"
-                          data-point-id="${point.id}"
-                          aria-label="${escapeHtml(point.label.trim() || 'Map point')}"
-                        >
-                          <span
-                            class="map-editor-point-pin"
-                            style="background-color: ${escapeHtml(pointType.color)};"
-                            aria-hidden="true"
-                          ></span>
-                        </button>
-                      `;
-                    })
-                    .join('')}
-                </div>
-              </div>
-              ${renderMapZoomControls()}
-            </div>
-            <p class="hint mt-2">Scroll to pan, use zoom controls or mouse wheel to zoom. Click the map to add a point.</p>
-          </div>
-        `
-        : ''
-    }
-
     <div class="map-editor-points mb-3">
-      <span class="label">Points</span>
-      ${
-        map.points.length === 0
-          ? '<p class="text-faint text-sm mt-1">No points yet.</p>'
-          : `
-            <ul class="map-editor-point-list mt-2">
-              ${map.points
-                .map(
-                  (point) => `
-                    <li class="map-editor-point-item${selectedPointId === point.id ? ' is-selected' : ''}">
-                      <input
-                        type="text"
-                        class="input map-editor-point-label"
-                        data-map-point-label="${map.id}"
-                        data-point-id="${point.id}"
-                        value="${escapeHtml(point.label)}"
-                        placeholder="Point label"
-                      />
-                      <label class="map-editor-point-field">
-                        <span class="label text-xs">Type</span>
-                        <select
-                          class="input map-editor-point-type"
-                          data-map-point-type="${map.id}"
-                          data-point-id="${point.id}"
-                        >
-                          ${renderPointTypeOptions(map, point.typeId)}
-                        </select>
-                      </label>
-                      <label class="map-editor-point-field">
-                        <span class="label text-xs">Checkbox</span>
-                        <select
-                          class="input map-editor-point-checkbox"
-                          data-map-point-checkbox="${map.id}"
-                          data-point-id="${point.id}"
-                        >
-                          ${renderCheckboxOptions(checkboxes, point.checkboxId)}
-                        </select>
-                      </label>
-                      <button
-                        type="button"
-                        class="btn-secondary text-xs"
-                        data-action="select-map-point"
-                        data-map-id="${map.id}"
-                        data-point-id="${point.id}"
-                      >${iconLabel('edit', 'Select', 'ui-icon ui-icon-sm')}</button>
-                      <button
-                        type="button"
-                        class="btn-secondary text-xs"
-                        data-action="remove-map-point"
-                        data-map-id="${map.id}"
-                        data-point-id="${point.id}"
-                      >${iconLabel('trash', 'Remove', 'ui-icon ui-icon-sm')}</button>
-                    </li>
-                  `,
-                )
-                .join('')}
-            </ul>
-          `
-      }
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <span class="label">Points</span>
+        <button
+          type="button"
+          class="btn-secondary text-sm"
+          data-action="edit-map-points"
+          data-map-id="${map.id}"
+          ${map.imageUrl ? '' : 'disabled'}
+        >${iconLabel('edit', pointsButtonLabel)}</button>
+      </div>
+      <p class="hint">${
+        map.imageUrl
+          ? map.points.length === 0
+            ? 'Open the point editor to place points on the map.'
+            : `${map.points.length} point${map.points.length === 1 ? '' : 's'} placed.`
+          : 'Upload a base image before adding points.'
+      }</p>
     </div>
-
   `;
 }
 
-function renderMapPanelTitleActions(mapId: string): string {
+function renderMapDetailPanel(map: GameMap): string {
   return `
-    <button type="button" class="btn-secondary" data-action="insert-map-marker" data-map-id="${mapId}" aria-label="Insert in content">
-      ${icon('plus', 'ui-icon ui-icon-sm')}
-    </button>
-    <button type="button" class="btn-danger" data-action="remove-map" data-map-id="${mapId}" aria-label="Remove map">
-      ${icon('trash', 'ui-icon ui-icon-sm')}
-    </button>
+    <div class="image-library-detail panel" data-item-detail data-map-id="${escapeHtml(map.id)}">
+      <div class="mb-3">
+        <p class="label mb-1">Selected map</p>
+        <p class="text-sm font-medium text-strong">${escapeHtml(map.name.trim() || 'Untitled map')}</p>
+      </div>
+      ${renderMapEditorBody(map)}
+      <p class="hint">The embed id updates automatically when you rename this map. Set viewport size and scroll position per embed in the journal.</p>
+    </div>
   `;
 }
 
 export function mountMapsEditor(
   host: HTMLElement,
-  editor: MarkdownEditorHandle,
   slug: string,
   initial: GameMapsData,
   getCheckboxes: () => CheckboxConnectionsData,
+  options: {
+    onMapsChanged?: () => void;
+    onMapIdChanged?: (oldId: string, newId: string) => void;
+  } = {},
 ): { getData: () => GameMapsData; cleanup: () => void } {
   let maps: GameMap[] = structuredClone(initial.maps).map(normalizeGameMap);
-  const expandedMaps = new Set<string>();
-  const selectedPoints = new Map<string, string | null>();
+  let selectedId: string | null = resolveEditorSelection(maps, null);
+  let showAddPanel = maps.length === 0;
   let searchQuery = '';
   let cleanupSearch = () => {};
-  let cleanupCanvasZoom = () => {};
+  let closePointsDialog = () => {};
+
+  host.innerHTML = renderEditorSplitLayout({
+    listTitle: 'Maps',
+    listLabel: 'Maps',
+    detailLabel: 'Map details',
+    addAction: 'add-map',
+    addLabel: 'Add map',
+    searchHtml: renderListSearchBar({
+      id: 'maps-search',
+      placeholder: 'Search maps...',
+      className: 'mb-3',
+    }),
+  });
+
+  const tableHost = host.querySelector('[data-item-table-host]') as HTMLElement;
+  const detailHost = host.querySelector('[data-item-detail-host]') as HTMLElement;
+  detailHost.innerHTML = `
+    <div data-map-add-panel class="image-library-detail panel${showAddPanel ? '' : ' hidden'}">
+      <p class="label mb-3">Add map</p>
+      <label class="block mb-3">
+        <span class="label">Map name</span>
+        <input
+          type="text"
+          data-field="new-map-name"
+          class="input"
+          placeholder="e.g. World map"
+        />
+      </label>
+      <p class="hint mb-3">The embed id is generated from the name.</p>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="btn-primary" data-action="confirm-add-map">${iconLabel('plus', 'Add map')}</button>
+        <button type="button" class="btn-secondary" data-action="cancel-add-map">${iconLabel('close', 'Cancel')}</button>
+      </div>
+    </div>
+    <div data-map-edit-host class="min-w-0"></div>
+    <p data-map-detail-placeholder class="editor-split-detail-empty text-muted text-sm hidden">
+      No maps yet. Click + to add one.
+    </p>
+  `;
+
+  const addPanel = detailHost.querySelector('[data-map-add-panel]') as HTMLElement;
+  const editHost = detailHost.querySelector('[data-map-edit-host]') as HTMLElement;
+  const detailPlaceholder = detailHost.querySelector(
+    '[data-map-detail-placeholder]',
+  ) as HTMLElement;
+  const newNameInput = addPanel.querySelector('[data-field="new-map-name"]') as HTMLInputElement;
 
   const syncFromDom = () => {
-    host.querySelectorAll('[data-map-name]').forEach((input) => {
+    editHost.querySelectorAll('[data-map-name]').forEach((input) => {
       const mapId = (input as HTMLElement).dataset.mapName;
       const map = maps.find((entry) => entry.id === mapId);
       if (map) map.name = (input as HTMLInputElement).value;
     });
 
-    host.querySelectorAll('[data-map-viewport-width]').forEach((input) => {
-      const mapId = (input as HTMLElement).dataset.mapViewportWidth;
-      const map = maps.find((entry) => entry.id === mapId);
-      if (map) map.viewport.width = Math.max(100, readNumber((input as HTMLInputElement).value, map.viewport.width));
-    });
-
-    host.querySelectorAll('[data-map-viewport-height]').forEach((input) => {
-      const mapId = (input as HTMLElement).dataset.mapViewportHeight;
-      const map = maps.find((entry) => entry.id === mapId);
-      if (map) map.viewport.height = Math.max(100, readNumber((input as HTMLInputElement).value, map.viewport.height));
-    });
-
-    host.querySelectorAll('[data-map-start-x]').forEach((input) => {
-      const mapId = (input as HTMLElement).dataset.mapStartX;
-      const map = maps.find((entry) => entry.id === mapId);
-      if (map) map.start.x = Math.max(0, readNumber((input as HTMLInputElement).value, map.start.x));
-    });
-
-    host.querySelectorAll('[data-map-start-y]').forEach((input) => {
-      const mapId = (input as HTMLElement).dataset.mapStartY;
-      const map = maps.find((entry) => entry.id === mapId);
-      if (map) map.start.y = Math.max(0, readNumber((input as HTMLInputElement).value, map.start.y));
-    });
-
-    host.querySelectorAll('[data-map-point-label]').forEach((input) => {
-      const mapId = (input as HTMLElement).dataset.mapPointLabel;
-      const pointId = (input as HTMLElement).dataset.pointId;
-      const map = maps.find((entry) => entry.id === mapId);
-      const point = map?.points.find((entry) => entry.id === pointId);
-      if (point) point.label = (input as HTMLInputElement).value;
-    });
-
-    host.querySelectorAll('[data-map-point-type]').forEach((select) => {
-      const mapId = (select as HTMLElement).dataset.mapPointType;
-      const pointId = (select as HTMLElement).dataset.pointId;
-      const map = maps.find((entry) => entry.id === mapId);
-      const point = map?.points.find((entry) => entry.id === pointId);
-      if (point) point.typeId = (select as HTMLSelectElement).value || null;
-    });
-
-    host.querySelectorAll('[data-map-point-checkbox]').forEach((select) => {
-      const mapId = (select as HTMLElement).dataset.mapPointCheckbox;
-      const pointId = (select as HTMLElement).dataset.pointId;
-      const map = maps.find((entry) => entry.id === mapId);
-      const point = map?.points.find((entry) => entry.id === pointId);
-      if (point) {
-        const value = (select as HTMLSelectElement).value;
-        point.checkboxId = value || null;
-      }
-    });
-
-    host.querySelectorAll('[data-map-point-type-name]').forEach((input) => {
+    editHost.querySelectorAll('[data-map-point-type-name]').forEach((input) => {
       const mapId = (input as HTMLElement).dataset.mapPointTypeName;
       const typeId = (input as HTMLElement).dataset.typeId;
       const map = maps.find((entry) => entry.id === mapId);
@@ -429,7 +277,7 @@ export function mountMapsEditor(
       if (type) type.name = (input as HTMLInputElement).value;
     });
 
-    host.querySelectorAll('[data-map-point-type-color]').forEach((input) => {
+    editHost.querySelectorAll('[data-map-point-type-color]').forEach((input) => {
       const mapId = (input as HTMLElement).dataset.mapPointTypeColor;
       const typeId = (input as HTMLElement).dataset.typeId;
       const map = maps.find((entry) => entry.id === mapId);
@@ -440,72 +288,98 @@ export function mountMapsEditor(
     });
   };
 
-  const wireCanvasZoom = () => {
-    cleanupCanvasZoom();
-    const cleanups: Array<() => void> = [];
+  const isEditingDetail = (): boolean => {
+    const active = document.activeElement;
+    if (!active || !detailHost.contains(active)) return false;
+    return active.matches('input, select, textarea');
+  };
 
-    host.querySelectorAll('[data-map-viewport]').forEach((viewportEl) => {
-      const mapId = (viewportEl as HTMLElement).dataset.mapViewport;
-      const map = maps.find((entry) => entry.id === mapId);
-      const frame = viewportEl.closest('.map-editor-frame') as HTMLElement | null;
-      const image = viewportEl.querySelector('.map-editor-image') as HTMLImageElement | null;
-      const zoomLabel = frame?.querySelector('[data-map-zoom-label]') as HTMLElement | null;
-      if (!map || !image || !frame) return;
-
-      cleanups.push(
-        wireMapZoom(viewportEl as HTMLElement, image, {
-          startX: map.start.x,
-          startY: map.start.y,
-          zoomLabel,
-          zoomControlsRoot: frame,
-        }),
-      );
+  const scrollSelectedRowIntoView = () => {
+    requestAnimationFrame(() => {
+      tableHost.querySelector<HTMLElement>('tr.is-selected')?.scrollIntoView({ block: 'nearest' });
     });
+  };
 
-    cleanupCanvasZoom = () => {
-      cleanups.forEach((cleanup) => cleanup());
-      cleanupCanvasZoom = () => {};
-    };
+  const commitMapUpdate = (id: string, updates: { name?: string }): string | false => {
+    const map = maps.find((entry) => entry.id === id);
+    if (!map) return false;
+
+    if (updates.name !== undefined) {
+      map.name = updates.name.trim();
+    }
+
+    const nameForId = map.name.trim() || 'Untitled map';
+    const derivedId = slugifyMapId(
+      nameForId,
+      new Set(maps.filter((entry) => entry.id !== map.id).map((entry) => entry.id)),
+    );
+
+    if (derivedId !== map.id) {
+      if (maps.some((entry) => entry.id === derivedId)) return false;
+      const oldId = map.id;
+      if (selectedId === oldId) selectedId = derivedId;
+      map.id = derivedId;
+      options.onMapIdChanged?.(oldId, derivedId);
+    }
+
+    render();
+    return map.id;
   };
 
   const render = () => {
+    if (isEditingDetail()) return;
+
     syncFromDom();
-    cleanupCanvasZoom();
 
-    const checkboxes = getCheckboxes().checkboxes;
+    if (!showAddPanel) {
+      selectedId = resolveEditorSelection(maps, selectedId);
+    }
 
-    host.innerHTML = `
-      ${maps.length > 0 ? renderListSearchBar({ id: 'maps-search', placeholder: 'Search maps...' }) : ''}
-      <div class="space-y-2">
-        ${
-          maps.length === 0
-            ? '<p class="text-faint text-sm">No maps yet.</p>'
-            : maps
-                .map((map) => {
-                  const title = map.name.trim() || map.id || 'Untitled map';
-                  const selectedPointId = selectedPoints.get(map.id) ?? null;
-                  return renderCollapsiblePanel({
-                    title,
-                    titleActions: renderMapPanelTitleActions(map.id),
-                    className: 'map-editor-card',
-                    defaultOpen: expandedMaps.has(map.id),
-                    attributes: {
-                      'map-id': map.id,
-                      'search-text': `${map.name} ${map.id}`,
-                    },
-                    content: renderMapEditorBody(map, selectedPointId, checkboxes),
-                  });
-                })
-                .join('')
-        }
-      </div>
-      <div class="mt-4">
-        <button type="button" class="btn-secondary" data-action="add-map">${iconLabel('plus', 'Add map')}</button>
-      </div>
-    `;
+    const listScrollTop = readListScroll(tableHost);
+
+    tableHost.innerHTML = renderEditorItemTable(
+      maps.map((map) => ({
+        id: map.id,
+        primary: map.name.trim() || 'Untitled map',
+        searchText: `${map.name} ${map.id}`,
+      })),
+      {
+        emptyMessage: 'No maps yet. Click + to add one.',
+        selectedId: showAddPanel ? null : selectedId,
+        rowAction: 'select-map',
+        primaryHeader: 'Name',
+        removeAction: 'remove-map',
+      },
+    );
+
+    if (showAddPanel) {
+      addPanel.classList.remove('hidden');
+      editHost.innerHTML = '';
+      editHost.classList.add('hidden');
+      detailPlaceholder.classList.add('hidden');
+    } else if (selectedId) {
+      const map = maps.find((entry) => entry.id === selectedId);
+      if (map) {
+        addPanel.classList.add('hidden');
+        editHost.classList.remove('hidden');
+        editHost.innerHTML = renderMapDetailPanel(map);
+        detailPlaceholder.classList.add('hidden');
+      } else {
+        addPanel.classList.add('hidden');
+        editHost.innerHTML = '';
+        editHost.classList.add('hidden');
+        detailPlaceholder.textContent = 'Select a map from the list.';
+        detailPlaceholder.classList.remove('hidden');
+      }
+    } else {
+      addPanel.classList.add('hidden');
+      editHost.innerHTML = '';
+      editHost.classList.add('hidden');
+      detailPlaceholder.textContent = 'No maps yet. Click + to add one.';
+      detailPlaceholder.classList.remove('hidden');
+    }
 
     wireStaticActions();
-    wireCanvasZoom();
 
     cleanupSearch();
     const search = wireListSearch(host, {
@@ -513,36 +387,72 @@ export function mountMapsEditor(
       onQueryChange: (query) => {
         searchQuery = query;
       },
+      itemSelector: '[data-search-text]',
     });
     cleanupSearch = search.cleanup;
+    options.onMapsChanged?.();
+    restoreListScroll(tableHost, listScrollTop);
+  };
+
+  const handleMapImageUpload = async (mapId: string | undefined) => {
+    if (!mapId) return;
+    syncFromDom();
+    const map = maps.find((entry) => entry.id === mapId);
+    const input = editHost.querySelector(`[data-map-image-input="${mapId}"]`) as HTMLInputElement | null;
+    const file = input?.files?.[0];
+    if (!map || !file) return;
+
+    try {
+      const uploaded = await uploadGameImage(slug, file);
+      map.imageUrl = uploaded.url;
+      map.imageFilename = uploaded.filename;
+      if (input) input.value = '';
+      render();
+    } catch (error) {
+      if (error instanceof AuthRequiredError && (await requireAuth())) {
+        await handleMapImageUpload(mapId);
+      }
+    }
   };
 
   const wireStaticActions = () => {
-    host.querySelectorAll('[data-action="add-map"]').forEach((button) => {
-      button.addEventListener('click', () => {
-        syncFromDom();
-        const map = defaultMap(new Set(maps.map((entry) => entry.id)));
-        maps.push(map);
-        expandedMaps.add(map.id);
+    wireEditorItemTable(tableHost, {
+      rowSelector: '[data-action="select-map"]',
+      readKey: (row) => row.dataset.itemId,
+      isSelected: (id) => !showAddPanel && id === selectedId,
+      onSelect: (id) => {
+        showAddPanel = false;
+        selectedId = id;
         render();
-      });
+      },
     });
 
-    host.querySelectorAll('[data-action="remove-map"]').forEach((button) => {
-      button.addEventListener('click', (event) => {
-        event.stopPropagation();
-        const mapId = (button as HTMLElement).dataset.mapId;
-        if (!mapId) return;
+    wireEditorItemTableRemove(tableHost, {
+      buttonSelector: '[data-action="remove-map"]',
+      readKey: (button) => button.dataset.itemId,
+      onRemove: (mapId) => {
         maps = maps.filter((entry) => entry.id !== mapId);
-        expandedMaps.delete(mapId);
-        selectedPoints.delete(mapId);
+        selectedId = resolveEditorSelection(maps, selectedId);
+        if (maps.length === 0) showAddPanel = true;
         render();
+      },
+    });
+
+    editHost.querySelectorAll('[data-map-name]').forEach((input) => {
+      input.addEventListener('input', () => {
+        const mapId = (input as HTMLElement).dataset.mapName;
+        const map = maps.find((entry) => entry.id === mapId);
+        if (map) map.name = (input as HTMLInputElement).value;
+      });
+      input.addEventListener('blur', () => {
+        const mapId = (input as HTMLElement).dataset.mapName;
+        if (!mapId) return;
+        commitMapUpdate(mapId, { name: (input as HTMLInputElement).value.trim() });
       });
     });
 
-    host.querySelectorAll('[data-action="add-point-type"]').forEach((button) => {
-      button.addEventListener('click', (event) => {
-        event.stopPropagation();
+    editHost.querySelectorAll('[data-action="add-point-type"]').forEach((button) => {
+      button.addEventListener('click', () => {
         syncFromDom();
         const mapId = (button as HTMLElement).dataset.mapId;
         const map = maps.find((entry) => entry.id === mapId);
@@ -561,9 +471,8 @@ export function mountMapsEditor(
       });
     });
 
-    host.querySelectorAll('[data-action="remove-point-type"]').forEach((button) => {
-      button.addEventListener('click', (event) => {
-        event.stopPropagation();
+    editHost.querySelectorAll('[data-action="remove-point-type"]').forEach((button) => {
+      button.addEventListener('click', () => {
         syncFromDom();
         const mapId = (button as HTMLElement).dataset.mapId;
         const typeId = (button as HTMLElement).dataset.typeId;
@@ -581,142 +490,65 @@ export function mountMapsEditor(
       });
     });
 
-    host.querySelectorAll('[data-action="insert-map-marker"]').forEach((button) => {
-      button.addEventListener('click', (event) => {
-        event.stopPropagation();
-        syncFromDom();
-        const mapId = (button as HTMLElement).dataset.mapId;
-        const map = maps.find((entry) => entry.id === mapId);
-        if (!map) return;
-        editor.insertLine(buildMapMarker(map));
-      });
-    });
-
-    host.querySelectorAll('[data-map-id-field]').forEach((input) => {
-      input.addEventListener('change', () => {
-        syncFromDom();
-        const oldId = (input as HTMLElement).dataset.mapIdField;
-        const newId = (input as HTMLInputElement).value.trim();
-        const map = maps.find((entry) => entry.id === oldId);
-        if (!map || !newId || newId === oldId) return;
-        if (maps.some((entry) => entry.id === newId)) return;
-
-        if (expandedMaps.has(oldId)) {
-          expandedMaps.delete(oldId);
-          expandedMaps.add(newId);
-        }
-        const selected = selectedPoints.get(oldId) ?? null;
-        selectedPoints.delete(oldId);
-        if (selected) selectedPoints.set(newId, selected);
-        map.id = newId;
-        render();
-      });
-    });
-
-    host.querySelectorAll('[data-action="upload-map-image"]').forEach((button) => {
-      button.addEventListener('click', (event) => {
-        event.stopPropagation();
+    editHost.querySelectorAll('[data-action="upload-map-image"]').forEach((button) => {
+      button.addEventListener('click', () => {
         void handleMapImageUpload((button as HTMLElement).dataset.mapId);
       });
     });
 
-    host.querySelectorAll('[data-map-viewport]').forEach((canvas) => {
-      canvas.addEventListener('click', (event) => {
-        event.stopPropagation();
-        const target = event.target as HTMLElement;
-        if (target.closest('[data-map-point]')) return;
-
-        const mapId = (canvas as HTMLElement).dataset.mapViewport;
-        const map = maps.find((entry) => entry.id === mapId);
-        const img = canvas.querySelector('.map-editor-image') as HTMLImageElement | null;
-        if (!map || !img) return;
-
-        const position = getImagePercentFromClick(img, event.clientX, event.clientY);
-        if (!position) return;
-
-        syncFromDom();
-        const point = {
-          id: crypto.randomUUID(),
-          x: clampPercent(position.x),
-          y: clampPercent(position.y),
-          label: `Point ${map.points.length + 1}`,
-          typeId: map.pointTypes[0]?.id ?? 'default',
-          checkboxId: null,
-        };
-        map.points.push(point);
-        selectedPoints.set(map.id, point.id);
-        render();
-      });
-    });
-
-    host.querySelectorAll('[data-map-point]').forEach((pointEl) => {
-      pointEl.addEventListener('click', (event) => {
-        event.stopPropagation();
-        const mapId = (pointEl as HTMLElement).dataset.mapPoint;
-        const pointId = (pointEl as HTMLElement).dataset.pointId;
-        if (!mapId || !pointId) return;
-        selectedPoints.set(mapId, pointId);
-        render();
-      });
-    });
-
-    host.querySelectorAll('[data-action="select-map-point"]').forEach((button) => {
-      button.addEventListener('click', (event) => {
-        event.stopPropagation();
-        const mapId = (button as HTMLElement).dataset.mapId;
-        const pointId = (button as HTMLElement).dataset.pointId;
-        if (!mapId || !pointId) return;
-        selectedPoints.set(mapId, pointId);
-        render();
-      });
-    });
-
-    host.querySelectorAll('[data-action="remove-map-point"]').forEach((button) => {
-      button.addEventListener('click', (event) => {
-        event.stopPropagation();
+    editHost.querySelectorAll('[data-action="edit-map-points"]').forEach((button) => {
+      button.addEventListener('click', () => {
         syncFromDom();
         const mapId = (button as HTMLElement).dataset.mapId;
-        const pointId = (button as HTMLElement).dataset.pointId;
         const map = maps.find((entry) => entry.id === mapId);
-        if (!map || !pointId) return;
-        map.points = map.points.filter((point) => point.id !== pointId);
-        if (selectedPoints.get(mapId ?? '') === pointId) {
-          selectedPoints.set(mapId ?? '', null);
-        }
-        render();
+        if (!map?.imageUrl) return;
+
+        closePointsDialog();
+        closePointsDialog = openMapPointsEditorDialog({
+          map: structuredClone(map),
+          checkboxes: getCheckboxes().checkboxes,
+          onSave: (points) => {
+            map.points = points;
+            render();
+          },
+        });
       });
     });
   };
 
-  const handleMapImageUpload = async (mapId: string | undefined) => {
-    if (!mapId) return;
-    syncFromDom();
-    const map = maps.find((entry) => entry.id === mapId);
-    const input = host.querySelector(`[data-map-image-input="${mapId}"]`) as HTMLInputElement | null;
-    const file = input?.files?.[0];
-    if (!map || !file) return;
-
-    try {
-      const uploaded = await uploadGameImage(slug, file);
-      map.imageUrl = uploaded.url;
-      map.imageFilename = uploaded.filename;
-      if (input) input.value = '';
-      expandedMaps.add(map.id);
-      render();
-    } catch (error) {
-      if (error instanceof AuthRequiredError && (await requireAuth())) {
-        await handleMapImageUpload(mapId);
-      }
+  const confirmAddMap = () => {
+    const name = newNameInput.value.trim();
+    if (!name) {
+      newNameInput.focus();
+      return;
     }
+
+    const map = createMapFromName(name, maps);
+    maps.push(map);
+    selectedId = map.id;
+    showAddPanel = false;
+    newNameInput.value = '';
+    render();
+    scrollSelectedRowIntoView();
   };
 
-  const cleanupCollapsible = wireCollapsiblePanels(host, {
-    onToggle: (panel, expanded) => {
-      const mapId = panel.dataset.mapId;
-      if (!mapId) return;
-      if (expanded) expandedMaps.add(mapId);
-      else expandedMaps.delete(mapId);
-    },
+  host.querySelector('[data-action="add-map"]')?.addEventListener('click', () => {
+    showAddPanel = true;
+    render();
+    newNameInput.focus();
+  });
+
+  addPanel.querySelector('[data-action="confirm-add-map"]')?.addEventListener('click', confirmAddMap);
+  addPanel.querySelector('[data-action="cancel-add-map"]')?.addEventListener('click', () => {
+    showAddPanel = false;
+    newNameInput.value = '';
+    render();
+  });
+  newNameInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      confirmAddMap();
+    }
   });
 
   render();
@@ -728,14 +560,6 @@ export function mountMapsEditor(
         maps: maps.map((map) => normalizeGameMap({
           ...map,
           name: map.name.trim() || 'Untitled map',
-          viewport: {
-            width: Math.max(100, Math.round(map.viewport.width)),
-            height: Math.max(100, Math.round(map.viewport.height)),
-          },
-          start: {
-            x: Math.max(0, Math.round(map.start.x)),
-            y: Math.max(0, Math.round(map.start.y)),
-          },
           points: map.points.map((point) => ({
             ...point,
             label: point.label.trim(),
@@ -747,10 +571,20 @@ export function mountMapsEditor(
         })),
       };
     },
+    renameCheckboxReference: (oldId: string, newId: string) => {
+      let changed = false;
+      for (const map of maps) {
+        for (const point of map.points) {
+          if (point.checkboxId !== oldId) continue;
+          point.checkboxId = newId;
+          changed = true;
+        }
+      }
+      if (changed) render();
+    },
     cleanup: () => {
-      cleanupCanvasZoom();
+      closePointsDialog();
       cleanupSearch();
-      cleanupCollapsible();
     },
   };
 }

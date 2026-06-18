@@ -4,27 +4,31 @@ import { icon } from './icons.js';
 const EDITOR_TAB_HELP: Record<EditorTabId, string> = {
   content: `
     <p><strong>Pages</strong> — Use the sidebar to switch journal pages. Click to edit; double-click a name to rename.</p>
-    <p><strong>Writing</strong> — Use the toolbar for headings, formatting, checkboxes, progress bars, and media. Changes autosave.</p>
+    <p><strong>Writing</strong> — Use the toolbar for headings, formatting, checkboxes, progress bars, maps, and media. Changes autosave.</p>
     <p><strong>Viewer</strong> — Open the viewer to read the journal with live checkbox and progress tracking.</p>
   `,
   images: `
-    <p><strong>Library</strong> — Upload images and videos here, or import from a URL. Each file appears once with shared alt text and source attribution.</p>
+    <p><strong>Adding media</strong> — Import a URL or upload a file. Click + in the library to open the add form.</p>
+    <p><strong>Bulk import</strong> — Use the import button in the media list to paste many URLs at once. One URL per line, or use <code>URL;Alt Text;Source Label;Source URL</code> with semicolons between columns.</p>
+    <p><strong>Optional metadata</strong> — Alt text, source label, and source URL apply to imports and uploads. Alt text defaults to the filename; source URL defaults to the import URL when importing.</p>
+    <p><strong>Library</strong> — Select media from the list on the left. Edit alt text and source on the right.</p>
     <p><strong>Embedding</strong> — Use the Media toolbar button to place an embed in page content. Viewport size and centering are set per embed when editing the page.</p>
     <p><strong>Deleting</strong> — Removing a file from uploads deletes it from the server and strips any journal embeds that reference it.</p>
   `,
   maps: `
-    <p><strong>Maps</strong> — Upload a base image for each map, then place points on it. Pan with scroll and zoom with the controls or mouse wheel.</p>
-    <p><strong>Points</strong> — Define custom point types for the legend. Link points to checkboxes in the Checkboxes tab to reflect completion in the viewer.</p>
-    <p><strong>Reader view</strong> — Set viewport size and starting scroll position for the map window in the journal. Embed with <code>[[map:map-id]]</code>.</p>
+    <p><strong>Maps</strong> — Select a map from the list or click + to add one. Upload a base image and define point types.</p>
+    <p><strong>Points</strong> — Open the point editor to place points on the fullscreen map. Choose a type before clicking, then edit labels and checkbox links in the sidebar. In the viewer, use the legend below the map to show or hide each point type.</p>
+    <p><strong>Embedding</strong> — Insert with <code>[[map:map-id]]</code> or the toolbar map button. Click the map badge in the journal to set viewport size and starting scroll position per embed. The marker id updates when you rename the map.</p>
   `,
   checkboxes: `
-    <p><strong>Checkboxes</strong> — Define trackable items with stable lowercase ids. Nesting is supported for grouped goals.</p>
+    <p><strong>Checkboxes</strong> — Define trackable items with auto-generated ids. Nesting is supported for grouped goals.</p>
     <p><strong>Progress bars</strong> — Assign progress bars to each checkbox so completion counts toward the right totals.</p>
-    <p><strong>Embedding</strong> — Insert in page content with <code>- [[cb:id]] Label</code>, or use the toolbar checkbox button.</p>
+    <p><strong>Bulk add</strong> — Use the import button in the checkbox list to paste many checkboxes at once. One label per line, or use <code>Label;Parent;Progress Bars</code> with semicolons between columns and commas between progress bars.</p>
+    <p><strong>Embedding</strong> — Insert in page content with <code>- [[cb:id]] Label</code>, or use the toolbar checkbox button. The marker id updates when you rename the label.</p>
   `,
   tags: `
     <p><strong>Progress bars</strong> — Define named bars here. Each bar tracks completion for the checkboxes assigned to it in the Checkboxes tab.</p>
-    <p><strong>Embedding</strong> — Place a bar in page content with <code>[[pb:progress-bar-id]]</code> or the toolbar progress button. Embeds reference the stable id, so renaming the label does not disconnect them.</p>
+    <p><strong>Embedding</strong> — Place a bar in page content with <code>[[pb:progress-bar-id]]</code> or the toolbar progress button. The embed id updates when you rename the progress bar.</p>
     <p><strong>Viewer summary</strong> — Enable &quot;Show in summary&quot; to display a bar above the journal in the viewer.</p>
   `,
   admin: `

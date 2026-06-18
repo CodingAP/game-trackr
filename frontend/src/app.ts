@@ -59,4 +59,9 @@ export function initApp(): void {
 
     void renderRoute(currentMatch);
   });
+
+  window.addEventListener('game-trackr:local-data-changed', () => {
+    if (!currentMatch) return;
+    void renderRoute(currentMatch);
+  });
 }

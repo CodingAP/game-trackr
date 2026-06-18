@@ -1,7 +1,7 @@
 import type { FullJournalData, JournalPage } from '../types/index.js';
 import type { MarkdownEditorHandle } from '../types/markdownEditor.js';
 import { renderListSearchBar, wireListSearch } from './listSearch.js';
-import { icon, iconLabel } from './icons.js';
+import { icon } from './icons.js';
 
 function escapeHtml(value: string): string {
   return value
@@ -35,6 +35,7 @@ export function mountPagesEditor(
   host: HTMLElement,
   editor: MarkdownEditorHandle,
   initial: FullJournalData,
+  options: { onPagesChanged?: () => void } = {},
 ): {
   getData: () => FullJournalData;
   getActivePageId: () => string;
@@ -87,6 +88,7 @@ export function mountPagesEditor(
     }
 
     editingPageId = null;
+    options.onPagesChanged?.();
   };
 
   const focusRenameInput = (pageId: string) => {
@@ -102,15 +104,17 @@ export function mountPagesEditor(
   const render = () => {
     host.innerHTML = `
       <div class="pages-sidebar-inner">
+        ${renderListSearchBar({ id: 'pages-search', placeholder: 'Search pages...', className: 'mb-2' })}
         <div class="pages-sidebar-header">
           <span class="label">Pages</span>
-          <button type="button" class="btn-secondary text-xs" data-action="add-page">${iconLabel('plus', 'Add', 'ui-icon ui-icon-sm')}</button>
+          <button type="button" class="editor-split-add" data-action="add-page" aria-label="Add page">${icon('plus', 'ui-icon ui-icon-sm')}</button>
         </div>
-        ${renderListSearchBar({ id: 'pages-search', placeholder: 'Search pages...', className: 'mb-2' })}
         <ul class="pages-sidebar-list" role="tablist" aria-label="Journal pages">
           ${pages
             .map((page) => {
               const isEditing = editingPageId === page.id;
+              const isActive = page.id === activePageId;
+              const inTabOrder = isActive && !isEditing;
               const nameMarkup = isEditing
                 ? `<input
                     type="text"
@@ -123,7 +127,7 @@ export function mountPagesEditor(
 
               return `
                 <li
-                  class="pages-sidebar-item${page.id === activePageId ? ' is-active' : ''}"
+                  class="pages-sidebar-item${isActive ? ' is-active' : ''}"
                   role="presentation"
                   data-page-id="${page.id}"
                   data-search-text="${escapeHtml(`${page.name} ${page.id}`)}"
@@ -134,7 +138,8 @@ export function mountPagesEditor(
                     role="tab"
                     data-action="select-page"
                     data-page-id="${page.id}"
-                    aria-selected="${page.id === activePageId}"
+                    aria-selected="${isActive}"
+                    tabindex="${inTabOrder ? '0' : '-1'}"
                   >
                     ${nameMarkup}
                   </button>
@@ -146,6 +151,7 @@ export function mountPagesEditor(
                           data-action="remove-page"
                           data-page-id="${page.id}"
                           aria-label="Remove ${escapeHtml(page.name)}"
+                          tabindex="${inTabOrder ? '0' : '-1'}"
                         >${icon('close', 'ui-icon ui-icon-sm')}</button>`
                       : ''
                   }
@@ -168,6 +174,7 @@ export function mountPagesEditor(
         editingPageId = null;
         render();
         loadActivePage();
+        options.onPagesChanged?.();
       });
     });
 
@@ -181,6 +188,47 @@ export function mountPagesEditor(
         editingPageId = null;
         render();
         loadActivePage();
+      });
+
+      button.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Home' && event.key !== 'End') {
+          return;
+        }
+
+        event.preventDefault();
+        const tabs = [
+          ...host.querySelectorAll<HTMLButtonElement>('[data-action="select-page"]'),
+        ].filter((tab) => {
+          const item = tab.closest('[data-search-text]') as HTMLElement | null;
+          return item && !item.hidden;
+        });
+        const currentIndex = tabs.indexOf(button as HTMLButtonElement);
+        if (currentIndex < 0 || tabs.length === 0) return;
+
+        let nextIndex = currentIndex;
+        if (event.key === 'ArrowDown') {
+          nextIndex = Math.min(currentIndex + 1, tabs.length - 1);
+        } else if (event.key === 'ArrowUp') {
+          nextIndex = Math.max(currentIndex - 1, 0);
+        } else if (event.key === 'Home') {
+          nextIndex = 0;
+        } else if (event.key === 'End') {
+          nextIndex = tabs.length - 1;
+        }
+
+        const nextTab = tabs[nextIndex];
+        const pageId = nextTab?.dataset.pageId;
+        if (!pageId || pageId === activePageId) {
+          nextTab?.focus();
+          return;
+        }
+
+        persistActivePage();
+        activePageId = pageId;
+        editingPageId = null;
+        render();
+        loadActivePage();
+        host.querySelector<HTMLButtonElement>(`[data-action="select-page"][data-page-id="${pageId}"]`)?.focus();
       });
     });
 
@@ -254,6 +302,7 @@ export function mountPagesEditor(
         }
         render();
         loadActivePage();
+        options.onPagesChanged?.();
       });
     });
 

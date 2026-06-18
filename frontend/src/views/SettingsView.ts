@@ -5,14 +5,114 @@ import {
   exportLocalData,
   importLocalData,
 } from '../storage/backup.js';
-import { getTheme, getHideImages, saveHideImages, saveTheme } from '../storage/settings.js';
-import { THEME_OPTIONS } from '../types/index.js';
-import type { ThemeId } from '../types/index.js';
+import {
+  getHideImages,
+  getThemeSettings,
+  saveCustomThemeColors,
+  saveHideImages,
+  saveThemePreset,
+} from '../storage/settings.js';
+import { THEME_PRESET_OPTIONS } from '../theme/presets.js';
+import type { ThemeColors, ThemePresetId } from '../theme/types.js';
 import { iconLabel } from '../components/icons.js';
 
+function renderThemeEditor(settings = getThemeSettings()): string {
+  return `
+    <p class="text-muted text-sm">Choose a preset or customize the three main theme colors.</p>
+    <div class="theme-grid" role="radiogroup" aria-label="Theme presets">
+      ${THEME_PRESET_OPTIONS.map(
+        (preset) => `
+          <button
+            type="button"
+            class="theme-option ${settings.presetId === preset.id ? 'is-selected' : ''}"
+            data-theme-preset="${preset.id}"
+            role="radio"
+            aria-checked="${settings.presetId === preset.id}"
+          >
+            <span class="theme-preview">
+              ${[preset.colors.background, preset.colors.surface, preset.colors.accent]
+                .map((color) => `<span style="background-color: ${color}"></span>`)
+                .join('')}
+            </span>
+            <span class="theme-option-body">
+              <span class="theme-option-name">${preset.name}</span>
+              <span class="theme-option-desc">${preset.description}</span>
+            </span>
+          </button>
+        `,
+      ).join('')}
+    </div>
+
+    <div class="theme-editor mt-5 space-y-3">
+      <div class="flex items-center justify-between gap-3">
+        <h3 class="text-sm font-medium">Custom colors</h3>
+        <span id="theme-mode-label" class="text-muted text-xs">${settings.presetId === 'custom' ? 'Custom theme' : 'Based on preset'}</span>
+      </div>
+      <div class="theme-color-grid">
+        ${renderColorField('background', 'Background', settings.colors.background)}
+        ${renderColorField('surface', 'Surface', settings.colors.surface)}
+        ${renderColorField('accent', 'Accent', settings.colors.accent)}
+      </div>
+      <div class="theme-live-preview" aria-hidden="true">
+        <span style="background-color: ${settings.colors.background}"></span>
+        <span style="background-color: ${settings.colors.surface}"></span>
+        <span style="background-color: ${settings.colors.accent}"></span>
+      </div>
+    </div>
+    <p id="theme-status" class="text-muted text-sm mt-3"></p>
+  `;
+}
+
+function renderColorField(id: keyof ThemeColors, label: string, value: string): string {
+  return `
+    <label class="theme-color-field">
+      <span class="label">${label}</span>
+      <input type="color" id="theme-color-${id}" value="${value}" aria-label="${label} color" />
+      <input type="text" id="theme-color-${id}-hex" class="input theme-color-hex" value="${value}" maxlength="7" spellcheck="false" />
+    </label>
+  `;
+}
+
+function readCustomColors(container: HTMLElement): ThemeColors {
+  const read = (id: keyof ThemeColors): string => {
+    const hexInput = container.querySelector(`#theme-color-${id}-hex`) as HTMLInputElement;
+    return hexInput.value.trim();
+  };
+
+  return {
+    background: read('background'),
+    surface: read('surface'),
+    accent: read('accent'),
+  };
+}
+
+function updateThemeSelectionUi(container: HTMLElement, presetId: ThemePresetId | 'custom'): void {
+  container.querySelectorAll('[data-theme-preset]').forEach((button) => {
+    const selected = (button as HTMLElement).dataset.themePreset === presetId;
+    button.classList.toggle('is-selected', selected);
+    button.setAttribute('aria-checked', String(selected));
+  });
+
+  const modeLabel = container.querySelector('#theme-mode-label') as HTMLElement | null;
+  if (modeLabel) {
+    modeLabel.textContent = presetId === 'custom' ? 'Custom theme' : 'Based on preset';
+  }
+}
+
+function updateThemePreviewUi(container: HTMLElement, colors: ThemeColors): void {
+  const preview = container.querySelector('.theme-live-preview');
+  if (!preview) return;
+
+  const swatches = preview.querySelectorAll('span');
+  const values = [colors.background, colors.surface, colors.accent];
+  swatches.forEach((swatch, index) => {
+    (swatch as HTMLElement).style.backgroundColor = values[index] ?? '#000000';
+  });
+}
+
 export function renderSettings(container: HTMLElement): () => void {
-  const currentTheme = getTheme();
   const hideImages = getHideImages();
+  const initialTheme = getThemeSettings();
 
   const displayContent = `
     <p class="text-muted text-sm">Control how journals and game pages show media.</p>
@@ -22,32 +122,6 @@ export function renderSettings(container: HTMLElement): () => void {
     </label>
     <p class="hint mt-2">Hides images and videos in journal pages, embedded maps, and game info cover art.</p>
     <p id="display-status" class="text-muted text-sm mt-3"></p>
-  `;
-
-  const themeContent = `
-    <p class="text-muted text-sm">Choose a color theme for the app interface.</p>
-    <div class="theme-grid" role="radiogroup" aria-label="Theme">
-      ${THEME_OPTIONS.map(
-        (theme) => `
-          <button
-            type="button"
-            class="theme-option ${theme.id === currentTheme ? 'is-selected' : ''}"
-            data-theme="${theme.id}"
-            role="radio"
-            aria-checked="${theme.id === currentTheme}"
-          >
-            <span class="theme-preview">
-              ${theme.preview.map((color) => `<span style="background-color: ${color}"></span>`).join('')}
-            </span>
-            <span class="theme-option-body">
-              <span class="theme-option-name">${theme.name}</span>
-              <span class="theme-option-desc">${theme.description}</span>
-            </span>
-          </button>
-        `,
-      ).join('')}
-    </div>
-    <p id="theme-status" class="text-muted text-sm mt-3"></p>
   `;
 
   const exportedKeys = Object.keys(exportLocalData().data);
@@ -84,7 +158,7 @@ export function renderSettings(container: HTMLElement): () => void {
       </div>
 
       ${renderCollapsiblePanel({ title: 'Display', className: 'mb-6', content: displayContent })}
-      ${renderCollapsiblePanel({ title: 'Theme', className: 'mb-6', content: themeContent })}
+      ${renderCollapsiblePanel({ title: 'Theme', className: 'mb-6', content: renderThemeEditor(initialTheme) })}
       ${renderCollapsiblePanel({ title: 'Import / export', content: backupContent })}
     </div>
   `;
@@ -103,18 +177,59 @@ export function renderSettings(container: HTMLElement): () => void {
     displayStatus.textContent = hide ? 'Images are now hidden.' : 'Images are now shown.';
   };
 
-  const onThemeSelect = (event: Event) => {
+  const onThemePresetSelect = (event: Event) => {
     const button = event.currentTarget as HTMLButtonElement;
-    const theme = button.dataset.theme as ThemeId | undefined;
-    if (!theme) return;
+    const presetId = button.dataset.themePreset as ThemePresetId | undefined;
+    if (!presetId) return;
 
-    saveTheme(theme);
-    container.querySelectorAll('.theme-option').forEach((option) => {
-      const selected = (option as HTMLElement).dataset.theme === theme;
-      option.classList.toggle('is-selected', selected);
-      option.setAttribute('aria-checked', String(selected));
+    const saved = saveThemePreset(presetId);
+    updateThemeSelectionUi(container, saved.presetId);
+
+    for (const key of ['background', 'surface', 'accent'] as const) {
+      const colorInput = container.querySelector(`#theme-color-${key}`) as HTMLInputElement;
+      const hexInput = container.querySelector(`#theme-color-${key}-hex`) as HTMLInputElement;
+      colorInput.value = saved.colors[key];
+      hexInput.value = saved.colors[key];
+    }
+
+    updateThemePreviewUi(container, saved.colors);
+    themeStatus.textContent = `${THEME_PRESET_OPTIONS.find((entry) => entry.id === presetId)?.name ?? presetId} applied.`;
+  };
+
+  const onCustomColorChange = () => {
+    const saved = saveCustomThemeColors(readCustomColors(container));
+    updateThemeSelectionUi(container, saved.presetId);
+    updateThemePreviewUi(container, saved.colors);
+
+    for (const key of ['background', 'surface', 'accent'] as const) {
+      const colorInput = container.querySelector(`#theme-color-${key}`) as HTMLInputElement;
+      const hexInput = container.querySelector(`#theme-color-${key}-hex`) as HTMLInputElement;
+      colorInput.value = saved.colors[key];
+      hexInput.value = saved.colors[key];
+    }
+
+    themeStatus.textContent =
+      saved.presetId === 'custom' ? 'Custom theme applied.' : 'Theme updated from custom colors.';
+  };
+
+  const wireColorField = (id: keyof ThemeColors): void => {
+    const colorInput = container.querySelector(`#theme-color-${id}`) as HTMLInputElement;
+    const hexInput = container.querySelector(`#theme-color-${id}-hex`) as HTMLInputElement;
+
+    colorInput.addEventListener('input', () => {
+      hexInput.value = colorInput.value;
+      onCustomColorChange();
     });
-    themeStatus.textContent = `${THEME_OPTIONS.find((entry) => entry.id === theme)?.name ?? theme} theme applied.`;
+
+    hexInput.addEventListener('change', () => {
+      const value = hexInput.value.trim();
+      if (/^#?[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value)) {
+        const normalized = value.startsWith('#') ? value : `#${value}`;
+        colorInput.value = normalized;
+        hexInput.value = normalized;
+        onCustomColorChange();
+      }
+    });
   };
 
   const onExportData = () => {
@@ -151,9 +266,12 @@ export function renderSettings(container: HTMLElement): () => void {
     }
   };
 
-  container.querySelectorAll('[data-theme]').forEach((button) => {
-    button.addEventListener('click', onThemeSelect);
+  container.querySelectorAll('[data-theme-preset]').forEach((button) => {
+    button.addEventListener('click', onThemePresetSelect);
   });
+  for (const key of ['background', 'surface', 'accent'] as const) {
+    wireColorField(key);
+  }
   hideImagesInput.addEventListener('change', onHideImagesChange);
   exportButton.addEventListener('click', onExportData);
   importForm.addEventListener('submit', onImportData);
@@ -162,8 +280,8 @@ export function renderSettings(container: HTMLElement): () => void {
 
   return () => {
     cleanupCollapsible();
-    container.querySelectorAll('[data-theme]').forEach((button) => {
-      button.removeEventListener('click', onThemeSelect);
+    container.querySelectorAll('[data-theme-preset]').forEach((button) => {
+      button.removeEventListener('click', onThemePresetSelect);
     });
     exportButton.removeEventListener('click', onExportData);
     hideImagesInput.removeEventListener('change', onHideImagesChange);

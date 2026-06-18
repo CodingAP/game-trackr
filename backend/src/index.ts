@@ -34,12 +34,11 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   res.status(500).json({ error: err.message });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Server running at http://localhost:${PORT}`);
-  if (!isAuthConfigured()) {
+  if (!(await isAuthConfigured())) {
     console.warn(
-      'Warning: ADMIN_PASSWORD is missing or empty. CRUD routes require auth. ' +
-        'Set ADMIN_PASSWORD in .env (local dev) or pass it via container environment (Docker).',
+      'Warning: No accounts configured. Create backend/data/accounts.json.',
     );
   }
 });

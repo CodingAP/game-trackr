@@ -1,4 +1,5 @@
-import { applyTheme, getHideImages, getTheme, applyHideImages } from './settings.js';
+import { getHideImages, getThemeSettings, applyHideImages } from './settings.js';
+import { applyThemeSettings } from '../theme/applyTheme.js';
 
 export const LOCAL_STORAGE_KEYS = [
   'game-tracking:progress',
@@ -76,7 +77,12 @@ export function parseLocalDataBackup(json: string): LocalDataBackup {
   if (record.data && typeof record.data === 'object') {
     return {
       version: Number(record.version ?? BACKUP_VERSION),
-      exportedAt: typeof record.exportedAt === 'string' ? record.exportedAt : new Date().toISOString(),
+      exportedAt:
+        typeof record.exportedAt === 'string'
+          ? record.exportedAt
+          : typeof record.updatedAt === 'string'
+            ? record.updatedAt
+            : new Date().toISOString(),
       data: record.data as Record<string, unknown>,
     };
   }
@@ -99,31 +105,47 @@ export function parseLocalDataBackup(json: string): LocalDataBackup {
   };
 }
 
-export function importLocalData(json: string): string[] {
+export function importLocalData(json: string, options?: { replaceMissingKeys?: boolean }): string[] {
   const backup = parseLocalDataBackup(json);
   const importedKeys: string[] = [];
+  const replaceMissingKeys = options?.replaceMissingKeys ?? false;
 
   for (const key of LOCAL_STORAGE_KEYS) {
-    if (!(key in backup.data)) continue;
+    if (!(key in backup.data)) {
+      if (replaceMissingKeys) {
+        localStorage.removeItem(key);
+      }
+      continue;
+    }
+
     const value = backup.data[key];
-    if (value === undefined || value === null) continue;
+    if (value === undefined || value === null) {
+      if (replaceMissingKeys) {
+        localStorage.removeItem(key);
+      }
+      continue;
+    }
+
     writeStoredValue(key, value);
     importedKeys.push(key);
   }
 
-  if (importedKeys.length === 0) {
+  if (importedKeys.length === 0 && !replaceMissingKeys) {
     throw new Error('No recognized GameTrackr data found in file.');
   }
 
-  if (importedKeys.includes('game-tracking:theme')) {
-    applyTheme(getTheme());
+  applyImportedSideEffects(importedKeys, replaceMissingKeys);
+  return importedKeys;
+}
+
+function applyImportedSideEffects(importedKeys: string[], replaceMissingKeys = false): void {
+  if (replaceMissingKeys || importedKeys.includes('game-tracking:theme')) {
+    applyThemeSettings(getThemeSettings());
   }
 
-  if (importedKeys.includes('game-tracking:hide-images')) {
+  if (replaceMissingKeys || importedKeys.includes('game-tracking:hide-images')) {
     applyHideImages(getHideImages());
   }
-
-  return importedKeys;
 }
 
 export function downloadLocalDataBackup(): void {

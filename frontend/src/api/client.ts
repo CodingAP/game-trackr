@@ -72,11 +72,11 @@ export async function fetchAuthStatus(): Promise<AuthStatus> {
   return status;
 }
 
-export async function loginWithPassword(password: string): Promise<AuthSession> {
+export async function loginWithCredentials(username: string, password: string): Promise<AuthSession> {
   const response = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ username, password }),
   });
 
   if (!response.ok) {
@@ -86,6 +86,14 @@ export async function loginWithPassword(password: string): Promise<AuthSession> 
 
   const session = (await response.json()) as AuthSession;
   saveStoredAuth(session);
+
+  const { pullCloudBackupToLocal } = await import('../storage/cloudSync.js');
+  try {
+    await pullCloudBackupToLocal();
+  } catch (error) {
+    console.warn('Cloud sync failed after sign in:', error);
+  }
+
   window.dispatchEvent(new CustomEvent('game-trackr:auth-changed'));
   return session;
 }

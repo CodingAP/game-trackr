@@ -132,6 +132,61 @@ export function wireMapZoom(
   viewport.addEventListener('wheel', onWheel, { passive: false });
   cleanups.push(() => viewport.removeEventListener('wheel', onWheel));
 
+  let isPanning = false;
+  let panStart = { x: 0, y: 0, scrollLeft: 0, scrollTop: 0 };
+
+  const endPan = () => {
+    if (!isPanning) return;
+    isPanning = false;
+    viewport.classList.remove('is-panning');
+  };
+
+  const onPanMouseMove = (event: MouseEvent) => {
+    if (!isPanning || (event.buttons & 4) === 0) {
+      endPan();
+      return;
+    }
+
+    event.preventDefault();
+    const dx = event.clientX - panStart.x;
+    const dy = event.clientY - panStart.y;
+    viewport.scrollLeft = panStart.scrollLeft - dx;
+    viewport.scrollTop = panStart.scrollTop - dy;
+    clampScroll();
+  };
+
+  const onPanMouseUp = (event: MouseEvent) => {
+    if (event.button === 1) endPan();
+  };
+
+  const onPanMouseDown = (event: MouseEvent) => {
+    if (event.button !== 1 || viewport.classList.contains('is-centered')) return;
+
+    event.preventDefault();
+    isPanning = true;
+    panStart = {
+      x: event.clientX,
+      y: event.clientY,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+    };
+    viewport.classList.add('is-panning');
+  };
+
+  const onAuxClick = (event: MouseEvent) => {
+    if (event.button === 1) event.preventDefault();
+  };
+
+  viewport.addEventListener('mousedown', onPanMouseDown);
+  viewport.addEventListener('auxclick', onAuxClick);
+  window.addEventListener('mousemove', onPanMouseMove);
+  window.addEventListener('mouseup', onPanMouseUp);
+  cleanups.push(() => viewport.removeEventListener('mousedown', onPanMouseDown));
+  cleanups.push(() => viewport.removeEventListener('auxclick', onAuxClick));
+  cleanups.push(() => window.removeEventListener('mousemove', onPanMouseMove));
+  cleanups.push(() => window.removeEventListener('mouseup', onPanMouseUp));
+  cleanups.push(endPan);
+
   return () => {
     cleanups.forEach((cleanup) => cleanup());
   };

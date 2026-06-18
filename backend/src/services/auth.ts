@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { isAccountsConfigured, verifyAccountCredentials } from './accounts.js';
 
 const TOKEN_TTL_MS = 72 * 60 * 60 * 1000;
 
@@ -10,49 +11,38 @@ function base64UrlDecode(value: string): string {
   return Buffer.from(value, 'base64url').toString('utf8');
 }
 
-export function isAuthConfigured(): boolean {
-  return Boolean(process.env.ADMIN_PASSWORD?.trim());
-}
-
-export function getAdminPassword(): string {
-  return process.env.ADMIN_PASSWORD?.trim() ?? '';
+export async function isAuthConfigured(): Promise<boolean> {
+  return isAccountsConfigured();
 }
 
 function getTokenSecret(): string {
   const configured = process.env.AUTH_TOKEN_SECRET?.trim();
   if (configured) return configured;
 
-  const password = getAdminPassword();
-  return createHmac('sha256', password).update('game-trackr-auth').digest('hex');
+  return createHmac('sha256', 'game-trackr-auth').update('dev-token-secret').digest('hex');
 }
 
-export function verifyPassword(password: string): boolean {
-  const expected = getAdminPassword();
-  if (!expected) return false;
-
-  const provided = Buffer.from(password, 'utf8');
-  const target = Buffer.from(expected, 'utf8');
-  if (provided.length !== target.length) {
-    timingSafeEqual(target, target);
-    return false;
-  }
-
-  return timingSafeEqual(provided, target);
+export async function verifyLogin(
+  username: string,
+  password: string,
+): Promise<{ valid: true; username: string } | { valid: false }> {
+  return verifyAccountCredentials(username, password);
 }
 
-export function createAuthToken(): { token: string; expiresAt: string } {
+export function createAuthToken(username: string): { token: string; expiresAt: string; username: string } {
   const expiresAtMs = Date.now() + TOKEN_TTL_MS;
-  const payload = base64UrlEncode(JSON.stringify({ exp: expiresAtMs }));
+  const payload = base64UrlEncode(JSON.stringify({ exp: expiresAtMs, sub: username }));
   const signature = createHmac('sha256', getTokenSecret()).update(payload).digest('base64url');
   return {
     token: `${payload}.${signature}`,
     expiresAt: new Date(expiresAtMs).toISOString(),
+    username,
   };
 }
 
-export function verifyAuthToken(token: string): { valid: true; expiresAt: string } | { valid: false } {
-  if (!isAuthConfigured()) return { valid: false };
-
+export function verifyAuthToken(
+  token: string,
+): { valid: true; expiresAt: string; username: string } | { valid: false } {
   const [payloadPart, signaturePart] = token.split('.');
   if (!payloadPart || !signaturePart) return { valid: false };
 
@@ -67,12 +57,16 @@ export function verifyAuthToken(token: string): { valid: true; expiresAt: string
   }
 
   try {
-    const payload = JSON.parse(base64UrlDecode(payloadPart)) as { exp?: number };
-    if (!payload.exp || payload.exp <= Date.now()) {
+    const payload = JSON.parse(base64UrlDecode(payloadPart)) as { exp?: number; sub?: string };
+    if (!payload.exp || payload.exp <= Date.now() || !payload.sub?.trim()) {
       return { valid: false };
     }
 
-    return { valid: true, expiresAt: new Date(payload.exp).toISOString() };
+    return {
+      valid: true,
+      expiresAt: new Date(payload.exp).toISOString(),
+      username: payload.sub.trim().toLowerCase(),
+    };
   } catch {
     return { valid: false };
   }

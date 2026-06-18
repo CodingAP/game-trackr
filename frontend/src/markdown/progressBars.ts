@@ -20,7 +20,7 @@ export function createProgressBarFromName(name: string, bars: ProgressBar[]): Pr
 
 export interface UpsertProgressBarCallbacks {
   onRegister?: (bar: ProgressBar) => void;
-  onUpdate?: (id: string, updates: { name: string }) => void;
+  onUpdate?: (id: string, updates: { name: string }) => string | false | void;
 }
 
 export function upsertProgressBarByName(
@@ -35,15 +35,15 @@ export function upsertProgressBarByName(
   const existing = findProgressBarByName(bars, trimmed);
   if (existing) {
     if (existing.name.trim() !== trimmed) {
-      callbacks.onUpdate?.(existing.id, { name: trimmed });
-      return { ...existing, name: trimmed };
+      const nextId = callbacks.onUpdate?.(existing.id, { name: trimmed });
+      return { ...existing, id: typeof nextId === 'string' ? nextId : existing.id, name: trimmed };
     }
     return existing;
   }
 
   if (linkedId) {
-    callbacks.onUpdate?.(linkedId, { name: trimmed });
-    return { id: linkedId, name: trimmed, showInSummary: false };
+    const nextId = callbacks.onUpdate?.(linkedId, { name: trimmed });
+    return { id: typeof nextId === 'string' ? nextId : linkedId, name: trimmed, showInSummary: false };
   }
 
   const bar = createProgressBarFromName(trimmed, bars);

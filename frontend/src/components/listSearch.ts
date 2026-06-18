@@ -81,7 +81,9 @@ function syncSearchClearButton(input: HTMLInputElement): void {
   const field = input.closest('.list-search-field');
   const clearButton = field?.querySelector('[data-list-search-clear]') as HTMLButtonElement | null;
   if (!clearButton) return;
-  clearButton.classList.toggle('hidden', input.value.length === 0);
+  const hasValue = input.value.length > 0;
+  clearButton.classList.toggle('hidden', !hasValue);
+  clearButton.tabIndex = hasValue ? 0 : -1;
 }
 
 export function wireListSearch(

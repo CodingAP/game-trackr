@@ -1,11 +1,11 @@
 import { fetchAuthStatus, logout } from '../api/client.js';
 import { requireAuth } from './AuthPrompt.js';
-import { isLocallyAuthenticated } from '../storage/auth.js';
+import { getStoredAuth, isLocallyAuthenticated } from '../storage/auth.js';
 import { navigate } from '../router.js';
 import { iconLabel } from './icons.js';
 
 export function renderNav(container: HTMLElement): void {
-  const renderMarkup = (signedIn: boolean): string => `
+  const renderMarkup = (signedIn: boolean, username?: string): string => `
     <div class="nav-mobile">
       <button
         type="button"
@@ -28,13 +28,13 @@ export function renderNav(container: HTMLElement): void {
           data-nav="auth"
           class="nav-link nav-link-auth ${signedIn ? 'is-signed-in' : ''}"
         >
-          ${iconLabel(signedIn ? 'log-out' : 'log-in', signedIn ? 'Sign out' : 'Sign in')}
+          ${iconLabel(signedIn ? 'log-out' : 'log-in', signedIn ? (username ? `Sign out (${username})` : 'Sign out') : 'Sign in')}
         </button>
       </nav>
     </div>
   `;
 
-  container.innerHTML = renderMarkup(isLocallyAuthenticated());
+  container.innerHTML = renderMarkup(isLocallyAuthenticated(), getStoredAuth()?.username);
 
   const toggle = container.querySelector('.nav-menu-toggle') as HTMLButtonElement;
   const menu = container.querySelector('#nav-menu') as HTMLElement;
@@ -46,23 +46,25 @@ export function renderNav(container: HTMLElement): void {
     toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
   };
 
-  const setAuthButton = (signedIn: boolean): void => {
+  const setAuthButton = (signedIn: boolean, username?: string): void => {
     const authButton = container.querySelector('[data-nav="auth"]') as HTMLButtonElement | null;
     if (authButton) {
       authButton.innerHTML = iconLabel(
         signedIn ? 'log-out' : 'log-in',
-        signedIn ? 'Sign out' : 'Sign in',
+        signedIn ? (username ? `Sign out (${username})` : 'Sign out') : 'Sign in',
       );
       authButton.classList.toggle('is-signed-in', signedIn);
     }
   };
 
   const refreshAuthState = async (): Promise<void> => {
+    const localSession = getStoredAuth();
     try {
       const status = await fetchAuthStatus();
-      setAuthButton(status.authenticated || isLocallyAuthenticated());
+      const signedIn = status.authenticated || isLocallyAuthenticated();
+      setAuthButton(signedIn, status.username ?? localSession?.username);
     } catch {
-      setAuthButton(isLocallyAuthenticated());
+      setAuthButton(isLocallyAuthenticated(), localSession?.username);
     }
   };
 

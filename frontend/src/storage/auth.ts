@@ -3,6 +3,7 @@ const AUTH_STORAGE_KEY = 'game-tracking:auth';
 export interface StoredAuthSession {
   token: string;
   expiresAt: string;
+  username: string;
 }
 
 export function getStoredAuth(): StoredAuthSession | null {
@@ -11,7 +12,7 @@ export function getStoredAuth(): StoredAuthSession | null {
     if (!raw) return null;
 
     const session = JSON.parse(raw) as StoredAuthSession;
-    if (!session.token || !session.expiresAt) {
+    if (!session.token || !session.expiresAt || !session.username) {
       clearStoredAuth();
       return null;
     }

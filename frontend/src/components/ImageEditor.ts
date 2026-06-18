@@ -2,7 +2,6 @@ import {
   AuthRequiredError,
   deleteGameImage,
   fetchGameImages,
-  uploadGameImage,
   uploadGameImageFromUrl,
 } from '../api/client.js';
 import {
@@ -10,7 +9,8 @@ import {
   propagateImageMetadataInPages,
   removeAllDocumentImagesByUrl,
 } from '../markdown/imageDocument.js';
-import { buildImageSnippet, importImageSourceFromUrl } from '../markdown/images.js';
+import { importImageSourceFromUrl } from '../markdown/images.js';
+import { parseBulkImageImport } from '../markdown/imageBulkImport.js';
 import { defaultMediaAlt } from '../markdown/media.js';
 import {
   getLibraryEntry,
@@ -24,12 +24,15 @@ import type { UploadedImage } from '../types/index.js';
 import type { MarkdownEditorHandle } from '../types/markdownEditor.js';
 import type { ImageSourceLink } from '../markdown/images.js';
 import { requireAuth } from './AuthPrompt.js';
+import { openImageBulkImportDialog } from './ImageBulkImportDialog.js';
+import { icon } from './icons.js';
 import {
-  readMediaOptions,
   renderImageAddForm,
   renderImageEditPanel,
   renderImageTable,
+  wireImageAddForm,
 } from './imageMediaUi.js';
+import { renderEditorSplitLayout, resolveEditorUrlSelection, wireEditorItemTable, wireEditorItemTableRemove } from './editorLibraryUi.js';
 import { renderListSearchBar, wireListSearch } from './listSearch.js';
 import { readListScroll, restoreListScroll } from '../utils/scrollList.js';
 
@@ -63,6 +66,18 @@ function readImageLibraryForm(card: HTMLElement, entry: ImageLibraryEntry) {
   };
 }
 
+function resolveBulkImageSource(
+  importUrl: string,
+  sourceLabel: string,
+  sourceUrl: string,
+): ImageSourceLink | undefined {
+  const label = sourceLabel.trim();
+  const source = sourceUrl.trim();
+  if (label && source) return { label, url: source };
+  if (source) return importImageSourceFromUrl(source);
+  return importImageSourceFromUrl(importUrl);
+}
+
 export function mountImageEditor(
   container: HTMLElement,
   editor: MarkdownEditorHandle,
@@ -74,6 +89,7 @@ export function mountImageEditor(
     setAllContents: (contents: Record<string, string>) => void;
   },
   initialLibrary: ImageLibraryData,
+  options: { onMediaChanged?: () => void } = {},
 ): {
   cleanup: () => void;
   refreshUploaded: () => Promise<void>;
@@ -82,6 +98,7 @@ export function mountImageEditor(
   let uploadedImages: UploadedImage[] = [];
   let imageLibrary = structuredClone(initialLibrary);
   let selectedUrl: string | null = null;
+  let showAddPanel = false;
   const formDrafts = new Map<string, ImageFormDraft>();
   const handlers: Array<{ element: Element; handler: (event: Event) => void }> = [];
 
@@ -91,28 +108,91 @@ export function mountImageEditor(
         ? ''
         : '<p class="text-muted text-sm mb-4">Save the game before uploading media.</p>'
     }
-    <div class="image-library-layout">
-      <section class="image-insert-picker" aria-label="Media library">
-        <p class="label mb-2">Media library</p>
-        ${renderListSearchBar({ id: 'image-search', placeholder: 'Search media...', className: 'mb-3' })}
-        <div data-image-table-host class="image-picker-list"></div>
-      </section>
-      <section class="image-insert-upload" aria-label="Add new media">
-        <p class="label mb-2">Add new media</p>
-        ${slug ? renderImageAddForm({ formId: 'image-add-form', uploadMultiple: true, uploadButtonLabel: 'Upload' }) : '<p class="text-muted text-sm">Save the game before uploading media.</p>'}
-      </section>
-      <div data-image-detail-host class="image-library-detail-row"></div>
-    </div>
+    ${renderEditorSplitLayout({
+      listTitle: 'Media library',
+      listLabel: 'Media library',
+      detailLabel: 'Media details',
+      addAction: 'add-media',
+      addLabel: 'Add media',
+      listHeaderExtraHtml: slug
+        ? `
+          <button
+            type="button"
+            class="editor-split-add"
+            data-action="bulk-import-images"
+            aria-label="Bulk import media URLs"
+          >
+            ${icon('import', 'ui-icon ui-icon-sm')}
+          </button>
+        `
+        : '',
+      searchHtml: renderListSearchBar({
+        id: 'image-search',
+        placeholder: 'Search media...',
+        className: 'mb-3',
+      }),
+    })}
   `;
 
-  const tableHost = container.querySelector('[data-image-table-host]') as HTMLElement;
-  const detailHost = container.querySelector('[data-image-detail-host]') as HTMLElement;
-  const addForm = container.querySelector('#image-add-form') as HTMLFormElement | null;
-  const uploadStatus = container.querySelector('[data-role="upload-status"]') as HTMLElement | null;
-  const importUrlInput = container.querySelector('[data-field="import-url"]') as HTMLInputElement | null;
+  const tableHost = container.querySelector('[data-item-table-host]') as HTMLElement;
+  const detailHost = container.querySelector('[data-item-detail-host]') as HTMLElement;
+  detailHost.innerHTML = `
+    <div data-image-add-panel class="image-library-detail panel hidden">
+      ${
+        slug
+          ? renderImageAddForm({
+              formId: 'image-tab-add-form',
+              uploadMultiple: true,
+              uploadButtonLabel: 'Upload',
+            })
+          : '<p class="text-muted text-sm">Save the game before uploading media.</p>'
+      }
+    </div>
+    <div data-image-edit-host class="min-w-0"></div>
+    <p data-image-detail-placeholder class="editor-split-detail-empty text-muted text-sm hidden"></p>
+  `;
+
+  const addPanel = detailHost.querySelector('[data-image-add-panel]') as HTMLElement;
+  const editHost = detailHost.querySelector('[data-image-edit-host]') as HTMLElement;
+  const detailPlaceholder = detailHost.querySelector('[data-image-detail-placeholder]') as HTMLElement;
+
   const listSearch = wireListSearch(container, {
     itemSelector: '[data-search-text]',
   });
+
+  const syncLibraryFromUploads = () => {
+    imageLibrary = mergeLibraryWithUploads(
+      uploadedImages,
+      imageLibrary,
+      journalContent.getAllContents(),
+    );
+  };
+
+  const upsertUploadedImage = (image: UploadedImage) => {
+    if (uploadedImages.some((entry) => entry.url === image.url)) {
+      uploadedImages = uploadedImages.map((entry) =>
+        entry.url === image.url ? image : entry,
+      );
+      return;
+    }
+    uploadedImages = [...uploadedImages, image];
+  };
+
+  const scrollSelectedRowIntoView = () => {
+    requestAnimationFrame(() => {
+      tableHost.querySelector<HTMLElement>('tr.is-selected')?.scrollIntoView({ block: 'nearest' });
+    });
+  };
+
+  const finishMediaAdd = (uploaded: UploadedImage) => {
+    showAddPanel = false;
+    selectedUrl = uploaded.url;
+    listSearch.setQuery('');
+    syncLibraryFromUploads();
+    render();
+    scrollSelectedRowIntoView();
+    options.onMediaChanged?.();
+  };
 
   const clearHandlers = () => {
     handlers.forEach(({ element, handler }) => {
@@ -144,8 +224,9 @@ export function mountImageEditor(
 
   const isEditingImageField = (): boolean => {
     const active = document.activeElement;
-    if (!active) return false;
-    return active.matches('[data-image-url] [data-field], #image-add-form [data-field]');
+    if (!(active instanceof HTMLElement)) return false;
+    if (active.closest('[data-image-add-form]')) return true;
+    return active.matches('[data-image-url] [data-field]');
   };
 
   const scheduleRender = () => {
@@ -219,9 +300,10 @@ export function mountImageEditor(
     const focusEvent = event as FocusEvent;
     const target = focusEvent.target as HTMLElement;
     if (!target.matches('[data-field]')) return;
+    if (target.closest('[data-image-add-form]')) return;
 
     const related = focusEvent.relatedTarget as HTMLElement | null;
-    if (related?.matches('[data-field]') && detailHost.contains(related)) return;
+    if (related && detailHost.contains(related)) return;
 
     const card = target.closest('[data-image-url]') as HTMLElement | null;
     if (card) flushCommit(card);
@@ -284,55 +366,79 @@ export function mountImageEditor(
     clearHandlers();
 
     const allContents = journalContent.getAllContents();
-    imageLibrary = mergeLibraryWithUploads(uploadedImages, imageLibrary, allContents);
+    syncLibraryFromUploads();
     const entries = imageLibrary.images.map(applyDraftToEntry);
 
-    if (selectedUrl && !entries.some((entry) => entry.url === selectedUrl)) {
-      selectedUrl = null;
+    if (!showAddPanel) {
+      selectedUrl = resolveEditorUrlSelection(entries, selectedUrl);
     }
 
     const listScrollTop = readListScroll(tableHost);
 
     tableHost.innerHTML = renderImageTable(uploadedImages, imageLibrary, {
-      emptyMessage: 'No uploaded media yet. Add one on the right.',
+      emptyMessage: 'No uploaded media yet. Click + to add one.',
       rowAction: 'select-image',
-      selectedUrl,
+      selectedUrl: showAddPanel ? undefined : selectedUrl,
+      showRemove: true,
     });
 
-    if (selectedUrl) {
+    if (showAddPanel) {
+      addPanel.classList.remove('hidden');
+      editHost.innerHTML = '';
+      editHost.classList.add('hidden');
+      detailPlaceholder.classList.add('hidden');
+    } else if (selectedUrl) {
       const entry = entries.find((item) => item.url === selectedUrl);
       if (entry) {
-        detailHost.innerHTML = renderImageEditPanel(
+        addPanel.classList.add('hidden');
+        editHost.classList.remove('hidden');
+        editHost.innerHTML = renderImageEditPanel(
           entry,
           countDocumentImagesByUrl(allContents, entry.url),
         );
-        wireImageDimensions(detailHost);
+        wireImageDimensions(editHost);
+        detailPlaceholder.classList.add('hidden');
       } else {
-        detailHost.innerHTML = '';
+        addPanel.classList.add('hidden');
+        editHost.innerHTML = '';
+        editHost.classList.add('hidden');
+        detailPlaceholder.textContent = 'Select media from the list.';
+        detailPlaceholder.classList.remove('hidden');
       }
     } else {
-      detailHost.innerHTML = '';
+      addPanel.classList.add('hidden');
+      editHost.innerHTML = '';
+      editHost.classList.add('hidden');
+      detailPlaceholder.textContent = 'No uploaded media yet. Click + to add one.';
+      detailPlaceholder.classList.remove('hidden');
     }
 
-    tableHost.querySelectorAll('[data-action="select-image"]').forEach((row) => {
-      const element = row as HTMLElement;
-      const handler = () => {
-        const url = element.dataset.imageUrl;
-        if (!url) return;
-        selectedUrl = selectedUrl === url ? null : url;
+    wireEditorItemTable(tableHost, {
+      rowSelector: '[data-action="select-image"]',
+      readKey: (row) => row.dataset.imageUrl,
+      isSelected: (url) => url === selectedUrl,
+      onSelect: (url) => {
+        showAddPanel = false;
+        selectedUrl = url;
         render();
-      };
-      element.addEventListener('click', handler);
-      element.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          handler();
-        }
-      });
-      handlers.push({ element, handler });
+      },
     });
 
-    detailHost.querySelectorAll('[data-action]').forEach((button) => {
+    wireEditorItemTableRemove(tableHost, {
+      buttonSelector: '[data-action="delete-upload"]',
+      readKey: (button) => button.closest('tr')?.dataset.imageUrl,
+      onRemove: (url) => {
+        const image = uploadedImages.find((item) => item.url === url);
+        if (!image) return;
+        void handleDeleteUpload(
+          url,
+          image.filename,
+          countDocumentImagesByUrl(journalContent.getAllContents(), url),
+        );
+      },
+    });
+
+    editHost.querySelectorAll('[data-image-url] [data-action]').forEach((button) => {
       const handler = (event: Event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -357,25 +463,6 @@ export function mountImageEditor(
 
           journalContent.setAllContents(removeAllDocumentImagesByUrl(contents, url));
           scheduleRender();
-          return;
-        }
-
-        if (action === 'insert-embed') {
-          imageLibrary = upsertLibraryEntry(imageLibrary, entry);
-          editor.insertLine(
-            buildImageSnippet({
-              alt: entry.alt,
-              url: entry.url,
-              source: entry.source,
-            }).trim(),
-          );
-          formDrafts.delete(url);
-          scheduleRender();
-          return;
-        }
-
-        if (action === 'delete-upload') {
-          void handleDeleteUpload(url, entry.filename, countDocumentImagesByUrl(contents, url));
         }
       };
 
@@ -387,7 +474,14 @@ export function mountImageEditor(
     restoreListScroll(tableHost, listScrollTop);
   };
 
+  container.querySelector('[data-action="add-media"]')?.addEventListener('click', () => {
+    showAddPanel = true;
+    selectedUrl = null;
+    render();
+  });
+
   const handleDeleteUpload = async (url: string, filename: string, embedCount: number) => {
+    const uploadStatus = addPanel.querySelector('[data-role="upload-status"]') as HTMLElement | null;
     const embedMessage =
       embedCount > 0
         ? ` This will also remove ${embedCount} embed${embedCount === 1 ? '' : 's'} from your journal content.`
@@ -411,8 +505,10 @@ export function mountImageEditor(
       imageLibrary = removeLibraryEntry(imageLibrary, url);
       formDrafts.delete(url);
       if (selectedUrl === url) selectedUrl = null;
+      showAddPanel = false;
       if (uploadStatus) uploadStatus.textContent = `Deleted ${filename}.`;
       await refreshUploaded();
+      options.onMediaChanged?.();
     } catch (error) {
       if (error instanceof AuthRequiredError && (await requireAuth())) {
         await handleDeleteUpload(url, filename, embedCount);
@@ -427,104 +523,137 @@ export function mountImageEditor(
   const refreshUploaded = async () => {
     if (!slug) {
       uploadedImages = [];
-      scheduleRender();
+      imageLibrary = { images: [] };
+      selectedUrl = null;
+      showAddPanel = true;
+      render();
       return;
     }
 
-    uploadedImages = await fetchGameImages(slug);
-    scheduleRender();
+    try {
+      uploadedImages = await fetchGameImages(slug);
+    } catch {
+      // Keep the in-memory list when refresh fails so recent uploads still appear.
+    }
+
+    syncLibraryFromUploads();
+    selectedUrl = resolveEditorUrlSelection(imageLibrary.images, selectedUrl);
+
+    if (uploadedImages.length === 0) {
+      showAddPanel = true;
+    }
+
+    render();
   };
 
   const onContentChange = () => scheduleRender();
   const unsubscribe = editor.onChange(onContentChange);
 
-  const handleUpload = async () => {
-    if (!addForm || !uploadStatus) return;
+  let cleanupAddForm = () => {};
+  if (slug) {
+    const addFormRoot = addPanel.querySelector('[data-image-add-form]') as HTMLElement | null;
+    const uploadStatus = addPanel.querySelector('[data-role="upload-status"]') as HTMLElement | null;
+    if (addFormRoot && uploadStatus) {
+      cleanupAddForm = wireImageAddForm({
+        root: addFormRoot,
+        statusEl: uploadStatus,
+        slug,
+        allowMultiple: true,
+        onUpload: async ({ uploads, mediaOptions, remoteUrl }) => {
+          for (const uploaded of uploads) {
+            upsertUploadedImage(uploaded);
+            imageLibrary = upsertLibraryEntry(imageLibrary, {
+              url: uploaded.url,
+              filename: uploaded.filename,
+              alt: mediaOptions.alt || defaultMediaAlt(uploaded.filename),
+              source:
+                mediaOptions.source ??
+                (remoteUrl ? importImageSourceFromUrl(remoteUrl) : undefined),
+            });
+          }
 
-    const fileInput = addForm.querySelector('[data-field="file"]') as HTMLInputElement;
-    const files = fileInput.files;
-    if (!files || files.length === 0) {
-      uploadStatus.textContent = 'Choose one or more media files to upload.';
-      fileInput.focus();
-      return;
+          const lastUploaded = uploads[uploads.length - 1];
+          uploadStatus.textContent = remoteUrl
+            ? 'Media imported from URL.'
+            : uploads.length === 1
+              ? 'Uploaded 1 file.'
+              : `Uploaded ${uploads.length} files.`;
+          finishMediaAdd(lastUploaded);
+          await refreshUploaded();
+        },
+      });
+    }
+  }
+
+  void refreshUploaded();
+
+  const bulkImportImages = async (text: string): Promise<{ added: number; errors: string[] }> => {
+    if (!slug) {
+      return { added: 0, errors: ['Save the game before importing media.'] };
     }
 
-    const mediaOptions = readMediaOptions(addForm);
-    uploadStatus.textContent = `Uploading ${files.length} file${files.length === 1 ? '' : 's'}...`;
+    const parsed = parseBulkImageImport(text);
+    const errors = parsed.errors.map(
+      (error) => `Line ${error.lineNumber}: ${error.message}`,
+    );
+    let added = 0;
+    let lastUploaded: UploadedImage | null = null;
 
-    try {
-      for (const file of files) {
-        const uploaded = await uploadGameImage(slug, file);
+    for (const row of parsed.rows) {
+      try {
+        const uploaded = await uploadGameImageFromUrl(slug, row.url);
+        upsertUploadedImage(uploaded);
         imageLibrary = upsertLibraryEntry(imageLibrary, {
           url: uploaded.url,
           filename: uploaded.filename,
-          alt: mediaOptions.alt || defaultMediaAlt(uploaded.filename),
-          source: mediaOptions.source,
+          alt: row.altText.trim() || defaultMediaAlt(uploaded.filename),
+          source: resolveBulkImageSource(row.url, row.sourceLabel, row.sourceUrl),
         });
+        added += 1;
+        lastUploaded = uploaded;
+      } catch (error) {
+        if (error instanceof AuthRequiredError && (await requireAuth())) {
+          try {
+            const uploaded = await uploadGameImageFromUrl(slug, row.url);
+            upsertUploadedImage(uploaded);
+            imageLibrary = upsertLibraryEntry(imageLibrary, {
+              url: uploaded.url,
+              filename: uploaded.filename,
+              alt: row.altText.trim() || defaultMediaAlt(uploaded.filename),
+              source: resolveBulkImageSource(row.url, row.sourceLabel, row.sourceUrl),
+            });
+            added += 1;
+            lastUploaded = uploaded;
+            continue;
+          } catch (retryError) {
+            errors.push(
+              `Line ${row.lineNumber}: ${retryError instanceof Error ? retryError.message : 'Import failed.'}`,
+            );
+            continue;
+          }
+        }
+        errors.push(
+          `Line ${row.lineNumber}: ${error instanceof Error ? error.message : 'Import failed.'}`,
+        );
       }
-      fileInput.value = '';
-      uploadStatus.textContent =
-        files.length === 1 ? 'Uploaded 1 file.' : `Uploaded ${files.length} files.`;
-      await refreshUploaded();
-    } catch (error) {
-      if (error instanceof AuthRequiredError && (await requireAuth())) {
-        await handleUpload();
-        return;
-      }
-      uploadStatus.textContent = error instanceof Error ? error.message : 'Upload failed';
     }
+
+    if (added > 0) {
+      showAddPanel = false;
+      selectedUrl = lastUploaded?.url ?? selectedUrl;
+      await refreshUploaded();
+      if (lastUploaded) scrollSelectedRowIntoView();
+      options.onMediaChanged?.();
+    }
+
+    return { added, errors };
   };
 
-  const handleImportFromUrl = async () => {
-    if (!addForm || !uploadStatus || !importUrlInput) return;
-
-    const remoteUrl = importUrlInput.value.trim();
-    if (!remoteUrl) {
-      uploadStatus.textContent = 'Enter a media URL to import.';
-      importUrlInput.focus();
-      return;
-    }
-
-    uploadStatus.textContent = 'Downloading media...';
-
-    try {
-      const uploaded = await uploadGameImageFromUrl(slug, remoteUrl);
-      const mediaOptions = readMediaOptions(addForm);
-      imageLibrary = upsertLibraryEntry(imageLibrary, {
-        url: uploaded.url,
-        filename: uploaded.filename,
-        alt: mediaOptions.alt || defaultMediaAlt(uploaded.filename),
-        source: mediaOptions.source ?? importImageSourceFromUrl(remoteUrl),
-      });
-      importUrlInput.value = '';
-      uploadStatus.textContent = 'Media imported from URL.';
-      await refreshUploaded();
-    } catch (error) {
-      if (error instanceof AuthRequiredError && (await requireAuth())) {
-        await handleImportFromUrl();
-        return;
-      }
-      uploadStatus.textContent = error instanceof Error ? error.message : 'Import failed';
-    }
-  };
-
-  addForm?.addEventListener('submit', (event) => {
-    event.preventDefault();
-    void handleUpload();
+  container.querySelector('[data-action="bulk-import-images"]')?.addEventListener('click', () => {
+    openImageBulkImportDialog({
+      onImport: bulkImportImages,
+    });
   });
-
-  container.querySelector('[data-action="import-url"]')?.addEventListener('click', () => {
-    void handleImportFromUrl();
-  });
-
-  importUrlInput?.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      void handleImportFromUrl();
-    }
-  });
-
-  void refreshUploaded();
 
   return {
     getData: () => {
@@ -546,6 +675,7 @@ export function mountImageEditor(
       commitTimers.clear();
       detailHost.removeEventListener('input', onDetailInput);
       detailHost.removeEventListener('focusout', onDetailFocusOut);
+      cleanupAddForm();
       listSearch.cleanup();
       unsubscribe();
       clearHandlers();

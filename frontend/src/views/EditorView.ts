@@ -2,6 +2,7 @@ import { openEmbedEditPopover } from '../components/EmbedEditPopover.js';
 import { openImageInsertDialogOrWarn } from '../components/ImageInsertDialog.js';
 import { openProgressInsertDialog } from '../components/ProgressInsertDialog.js';
 import { openCheckboxInsertDialog } from '../components/CheckboxInsertDialog.js';
+import { openMapInsertDialog } from '../components/MapInsertDialog.js';
 import { mountCheckboxConnectionsEditor } from '../components/CheckboxConnectionsEditor.js';
 import { wireCollapsiblePanels } from '../components/CollapsiblePanel.js';
 import { mountProgressBarsEditor } from '../components/ProgressBarsEditor.js';
@@ -31,6 +32,7 @@ import {
   buildProgressBarMarker,
   replaceProgressMarkerReference,
 } from '../markdown/completionProgress.js';
+import { replaceMapMarkerReference } from '../markdown/gameMaps.js';
 import {
   countPagesWithExtraWhitespace,
   removeExtraWhitespaceFromPages,
@@ -50,6 +52,7 @@ import {
 } from '../api/client.js';
 import { requireAuth } from '../components/AuthPrompt.js';
 import { consumeImportDraft } from '../utils/journalBundle.js';
+import { findProgressBarByName } from '../markdown/progressBars.js';
 import { replaceCheckboxMarkerId } from '../markdown/managedCheckboxes.js';
 import { navigate } from '../router.js';
 import { renderEditorTabHelp, wireEditorTabHelp } from '../components/editorTabHelp.js';
@@ -205,10 +208,10 @@ export async function renderEditor(
   let updateCheckbox: ((
     id: string,
     updates: { id?: string; label?: string },
-  ) => boolean) | null = null;
+  ) => string | false) | null = null;
   let setPageContent: ((pageId: string, content: string) => void) | null = null;
   let registerProgressBar: ((bar: import('../types/index.js').ProgressBar) => void) | null = null;
-  let updateProgressBar: ((id: string, updates: { name?: string; id?: string }) => void) | null = null;
+  let updateProgressBar: ((id: string, updates: { name?: string; id?: string }) => string | false) | null = null;
   let gameName = '';
   let cleanupTabHelp: (() => void) | null = null;
   let switchTab: ((id: EditorTabId) => void) | null = null;
@@ -364,22 +367,7 @@ export async function renderEditor(
       onRegisterCheckbox: (checkbox) => {
         registerCheckbox?.(checkbox);
       },
-      onUpdateCheckbox: (id, updates) => {
-        const success = updateCheckbox?.(id, updates) ?? false;
-        if (!success) return false;
-
-        if (updates.id && updates.id !== id && getJournalData && setPageContent) {
-          const journal = getJournalData();
-          for (const [pageId, content] of Object.entries(journal.contents)) {
-            const next = replaceCheckboxMarkerId(content, id, updates.id);
-            if (next !== content) {
-              setPageContent(pageId, next);
-            }
-          }
-        }
-
-        return true;
-      },
+      onUpdateCheckbox: (id, updates) => updateCheckbox?.(id, updates) ?? false,
       onRegisterProgressBar: (bar) => {
         registerProgressBar?.(bar);
       },
@@ -469,6 +457,13 @@ export async function renderEditor(
         },
       });
     },
+    onOpenMapPicker: () => {
+      openMapInsertDialog({
+        maps: getMapsData?.().maps ?? [],
+        getMaps: () => getMapsData?.().maps ?? [],
+        onInsert: (marker) => markdownEditor.insertLine(marker),
+      });
+    },
     onEditEmbed: handleEditEmbed,
   });
 
@@ -524,6 +519,7 @@ export async function renderEditor(
         container.querySelector('#pages-editor') as HTMLElement,
         markdownEditor,
         journal,
+        { onPagesChanged: scheduleAutosave },
       );
       getJournalData = pagesEditor.getData;
       getActivePageId = pagesEditor.getActivePageId;
@@ -576,6 +572,7 @@ export async function renderEditor(
           },
         },
         imageLibrary,
+        { onMediaChanged: scheduleAutosave },
       );
       getImageLibraryData = imageEditor.getData;
       cleanupImageEditor = imageEditor.cleanup;
@@ -590,15 +587,22 @@ export async function renderEditor(
         }
       };
 
-      const mapsEditor = mountMapsEditor(
-        container.querySelector('#maps-editor') as HTMLElement,
-        markdownEditor,
-        activeSlug,
-        maps,
-        () => getCheckboxesData?.() ?? checkboxes,
-      );
-      getMapsData = mapsEditor.getData;
-      cleanupMapsEditor = mapsEditor.cleanup;
+      const replaceCheckboxMarkersInJournal = (oldRef: string, newRef: string) => {
+        if (!setPageContent || !getJournalData || oldRef === newRef) return;
+        const journal = getJournalData();
+        const activePageId = getActivePageId?.() ?? '';
+        const contents = {
+          ...journal.contents,
+          ...(activePageId ? { [activePageId]: markdownEditor.getValue() } : {}),
+        };
+        for (const [pageId, content] of Object.entries(contents)) {
+          const next = replaceCheckboxMarkerId(content, oldRef, newRef);
+          if (next !== content) {
+            setPageContent(pageId, next);
+          }
+        }
+        scheduleAutosave();
+      };
 
       const replaceProgressMarkersInJournal = (oldRef: string, newRef: string) => {
         if (!setPageContent || !getJournalData || oldRef === newRef) return;
@@ -617,27 +621,48 @@ export async function renderEditor(
         scheduleAutosave();
       };
 
+      const replaceMapMarkersInJournal = (oldRef: string, newRef: string) => {
+        if (!setPageContent || !getJournalData || oldRef === newRef) return;
+        const journal = getJournalData();
+        const activePageId = getActivePageId?.() ?? '';
+        const contents = {
+          ...journal.contents,
+          ...(activePageId ? { [activePageId]: markdownEditor.getValue() } : {}),
+        };
+        for (const [pageId, content] of Object.entries(contents)) {
+          const next = replaceMapMarkerReference(content, oldRef, newRef);
+          if (next !== content) {
+            setPageContent(pageId, next);
+          }
+        }
+        scheduleAutosave();
+      };
+
+      const mapsEditor = mountMapsEditor(
+        container.querySelector('#maps-editor') as HTMLElement,
+        activeSlug,
+        maps,
+        () => getCheckboxesData?.() ?? checkboxes,
+        {
+          onMapsChanged: scheduleAutosave,
+          onMapIdChanged: replaceMapMarkersInJournal,
+        },
+      );
+      getMapsData = mapsEditor.getData;
+      cleanupMapsEditor = mapsEditor.cleanup;
+
       const progressBarsEditor = mountProgressBarsEditor(
         container.querySelector('#progress-bars-editor') as HTMLElement,
-        markdownEditor,
         progressBars,
         {
-          onProgressBarIdChange: (oldId, newId) => {
-            replaceProgressMarkersInJournal(oldId, newId);
-          },
           onProgressBarsChanged: () => {
             refreshCheckboxesEditor?.();
+            scheduleAutosave();
           },
         },
       );
       getProgressBarsData = progressBarsEditor.getData;
       registerProgressBar = progressBarsEditor.registerProgressBar;
-      updateProgressBar = (id, updates) => {
-        if (updates.id && updates.id !== id) {
-          replaceProgressMarkersInJournal(id, updates.id);
-        }
-        progressBarsEditor.updateProgressBar(id, updates);
-      };
       cleanupProgressBarsEditor = progressBarsEditor.cleanup;
 
       const checkboxesEditor = mountCheckboxConnectionsEditor(
@@ -660,13 +685,38 @@ export async function renderEditor(
           onParentsChanged: () => {
             void refreshEmbedContext();
           },
+          onCheckboxesChanged: scheduleAutosave,
+          onEnsureProgressBar: (name) => {
+            const bars = getProgressBarsData?.().tags ?? [];
+            const existing = findProgressBarByName(bars, name);
+            if (existing) return existing;
+            return progressBarsEditor.addProgressBar(name);
+          },
         },
       );
       getCheckboxesData = checkboxesEditor.getData;
       registerCheckbox = checkboxesEditor.addCheckbox;
-      updateCheckbox = checkboxesEditor.updateCheckbox;
+      updateCheckbox = (id, updates) => {
+        const newId = checkboxesEditor.updateCheckbox(id, updates);
+        if (newId === false) return false;
+        if (newId !== id) {
+          replaceCheckboxMarkersInJournal(id, newId);
+          mapsEditor.renameCheckboxReference(id, newId);
+        }
+        return newId;
+      };
       refreshCheckboxesEditor = checkboxesEditor.refresh;
       cleanupCheckboxesEditor = checkboxesEditor.cleanup;
+
+      updateProgressBar = (id, updates) => {
+        const newId = progressBarsEditor.updateProgressBar(id, updates);
+        if (newId === false) return false;
+        if (newId !== id) {
+          replaceProgressMarkersInJournal(id, newId);
+          checkboxesEditor.renameProgressBarReference(id, newId);
+        }
+        return newId;
+      };
 
       const mobyGamesHost = container.querySelector('#mobygames-admin') as HTMLElement;
       if (isNew) {

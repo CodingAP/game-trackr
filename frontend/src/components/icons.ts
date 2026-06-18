@@ -113,5 +113,6 @@ export const MARKDOWN_TOOLBAR_ICONS: Record<string, IconName> = {
   link: 'link',
   checkbox: 'checkbox',
   progress: 'progress',
+  map: 'map',
   image: 'image',
 };

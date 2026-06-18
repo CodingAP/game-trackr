@@ -1,3 +1,5 @@
+import { notifyLocalDataChanged } from './localDataEvents.js';
+
 export interface LibraryFolder {
   id: string;
   name: string;
@@ -62,6 +64,7 @@ export function getLibraryFolders(): LibraryFoldersState {
 
 export function saveLibraryFolders(state: LibraryFoldersState): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeState(state)));
+  notifyLocalDataChanged();
 }
 
 export function createFolderId(): string {

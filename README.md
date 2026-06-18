@@ -6,13 +6,16 @@ Built with [Cursor](https://cursor.com) AI.
 
 ## Authentication
 
-Create, edit, delete, and upload operations require an admin password set in `.env`:
+Create, edit, delete, and upload operations require signing in with an account from `backend/data/accounts.json` (not committed to git):
 
 ```bash
-ADMIN_PASSWORD=your_password_here
+cp backend/data/accounts.example.json backend/data/accounts.json
+# edit accounts.json with your username and password
 ```
 
 Sign in from the nav menu (or when you try to create/edit a journal). Sessions last **72 hours** via a browser-stored token. Viewing journals remains public.
+
+While signed in, your browser-stored progress and settings sync to `backend/data/users/{username}/` on the server. Cloud data takes priority over local storage when you sign in.
 
 ## Stack
 
@@ -24,7 +27,8 @@ Sign in from the nav menu (or when you try to create/edit a journal). Sessions l
 
 ```bash
 npm install
-cp .env.example .env   # set ADMIN_PASSWORD and optional MOBYGAMES_API_KEY
+cp backend/data/accounts.example.json backend/data/accounts.json
+cp .env.example .env   # optional MOBYGAMES_API_KEY
 npm run build
 ```
 
@@ -50,7 +54,8 @@ npm start
 Create a `.env` file on the server (it is not committed to git):
 
 ```bash
-cp .env.example .env   # set ADMIN_PASSWORD and optional MOBYGAMES_API_KEY
+cp backend/data/accounts.example.json backend/data/accounts.json
+cp .env.example .env   # optional MOBYGAMES_API_KEY
 docker compose up -d --build
 ```
 
@@ -64,23 +69,20 @@ docker compose up -d --build   # after pulling updates
 
 Game journals and uploads persist in the `gametrackr-data` volume.
 
-### Verify `.env` is loaded
+### Verify accounts are configured
 
 Run these from the repo root (same folder as `docker-compose.yml`):
 
 ```bash
-grep ADMIN_PASSWORD .env
-docker compose config | grep ADMIN_PASSWORD
-docker compose run --rm gametrackr sh -c 'test -n "$ADMIN_PASSWORD" && echo OK || echo MISSING'
+test -f backend/data/accounts.json && echo OK || echo MISSING
+docker compose run --rm gametrackr sh -c 'test -f /app/backend/data/accounts.json && echo OK || echo MISSING'
 ```
 
-If the last command prints `MISSING`, recreate the container:
+If the container check prints `MISSING`, create `backend/data/accounts.json` on the host and recreate the container:
 
 ```bash
 docker compose down && docker compose up -d --build
 ```
-
-Passwords with `$` or `#` in them are fine — keep them on a single line with no quotes unless the whole value is quoted.
 
 ## Project layout
 

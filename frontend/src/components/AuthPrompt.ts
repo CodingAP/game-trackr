@@ -1,4 +1,4 @@
-import { loginWithPassword } from '../api/client.js';
+import { loginWithCredentials } from '../api/client.js';
 import { isLocallyAuthenticated } from '../storage/auth.js';
 import { iconLabel } from './icons.js';
 
@@ -24,9 +24,13 @@ function showAuthPrompt(): Promise<boolean> {
     overlay.className = 'auth-overlay';
     overlay.innerHTML = `
       <div class="auth-dialog panel" role="dialog" aria-modal="true" aria-labelledby="auth-dialog-title">
-        <h2 id="auth-dialog-title" class="auth-dialog-title">Admin sign in</h2>
-        <p class="text-muted text-sm">Enter the admin password to create or edit game journals.</p>
+        <h2 id="auth-dialog-title" class="auth-dialog-title">Sign in</h2>
+        <p class="text-muted text-sm">Sign in to edit journals and sync your progress to the cloud.</p>
         <form id="auth-form" class="auth-form">
+          <label class="block">
+            <span class="label">Username</span>
+            <input type="text" id="auth-username" class="input" autocomplete="username" required />
+          </label>
           <label class="block">
             <span class="label">Password</span>
             <input type="password" id="auth-password" class="input" autocomplete="current-password" required />
@@ -41,6 +45,7 @@ function showAuthPrompt(): Promise<boolean> {
     `;
 
     const form = overlay.querySelector('#auth-form') as HTMLFormElement;
+    const usernameInput = overlay.querySelector('#auth-username') as HTMLInputElement;
     const passwordInput = overlay.querySelector('#auth-password') as HTMLInputElement;
     const errorEl = overlay.querySelector('#auth-error') as HTMLElement;
     const cancelButton = overlay.querySelector('[data-action="cancel"]') as HTMLButtonElement;
@@ -69,7 +74,7 @@ function showAuthPrompt(): Promise<boolean> {
       submitButton.disabled = true;
 
       try {
-        await loginWithPassword(passwordInput.value);
+        await loginWithCredentials(usernameInput.value, passwordInput.value);
         close(true);
       } catch (error) {
         errorEl.textContent = error instanceof Error ? error.message : 'Sign in failed';
@@ -82,6 +87,6 @@ function showAuthPrompt(): Promise<boolean> {
 
     document.addEventListener('keydown', onKeyDown);
     document.body.appendChild(overlay);
-    passwordInput.focus();
+    usernameInput.focus();
   });
 }

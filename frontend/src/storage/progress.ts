@@ -1,4 +1,5 @@
 import type { UserProgress } from '../types/index.js';
+import { notifyLocalDataChanged } from './localDataEvents.js';
 
 const STORAGE_KEY = 'game-tracking:progress';
 
@@ -14,6 +15,7 @@ function readAll(): UserProgress[] {
 
 function writeAll(progress: UserProgress[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+  notifyLocalDataChanged();
 }
 
 export function getProgress(gameSlug: string): UserProgress {

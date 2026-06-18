@@ -1,5 +1,4 @@
 import { slugifyProgressBarId } from '../markdown/completionProgress.js';
-import { SLUG_ID_PATTERN } from '../markdown/managedCheckboxes.js';
 import { renderListSearchBar, wireListSearch } from './listSearch.js';
 import { icon, iconLabel } from './icons.js';
 import type { ProgressBar } from '../types/index.js';
@@ -66,18 +65,7 @@ export function openProgressInsertDialog(options: {
           <span class="label">Progress bar name</span>
           <input type="text" id="progress-bar-name" class="input" placeholder="e.g. Complete World 1" required />
         </label>
-        <label class="block">
-          <span class="label">Progress bar id</span>
-          <input
-            type="text"
-            id="progress-bar-id"
-            class="input"
-            placeholder="e.g. complete-world-1"
-            pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-            required
-          />
-          <p class="hint mt-1">Lowercase letters, numbers, and hyphens only.</p>
-        </label>
+        <p class="hint">The embed id is generated from the name.</p>
         <p id="progress-insert-error" class="text-sm text-red-400 hidden"></p>
         <div class="flex flex-wrap gap-2">
           <button type="button" class="btn-primary" data-action="insert-new">${iconLabel('progress', 'Insert')}</button>
@@ -89,10 +77,7 @@ export function openProgressInsertDialog(options: {
 
   const listSearch = wireListSearch(overlay);
   const nameInput = overlay.querySelector('#progress-bar-name') as HTMLInputElement;
-  const idInput = overlay.querySelector('#progress-bar-id') as HTMLInputElement;
   const errorEl = overlay.querySelector('#progress-insert-error') as HTMLElement;
-  const existingIds = new Set(options.progressBars.map((bar) => bar.id));
-  let idTouched = false;
 
   const close = () => {
     listSearch.cleanup();
@@ -119,13 +104,6 @@ export function openProgressInsertDialog(options: {
     close();
   };
 
-  const maybeSuggestId = () => {
-    if (idTouched || idInput.value.trim()) return;
-    const name = nameInput.value.trim();
-    if (!name) return;
-    idInput.value = slugifyProgressBarId(name, existingIds);
-  };
-
   overlay.querySelectorAll('[data-action="close"]').forEach((button) => {
     button.addEventListener('click', close);
   });
@@ -144,27 +122,16 @@ export function openProgressInsertDialog(options: {
     });
   });
 
-  nameInput.addEventListener('blur', maybeSuggestId);
-  idInput.addEventListener('input', () => {
-    idTouched = true;
-    clearError();
-  });
   nameInput.addEventListener('input', clearError);
 
   overlay.querySelector('[data-action="insert-new"]')?.addEventListener('click', () => {
     clearError();
 
     const name = nameInput.value.trim();
-    const id = idInput.value.trim();
-    if (!name || !id) return;
-
-    if (!SLUG_ID_PATTERN.test(id)) {
-      showError('Progress bar id must use lowercase letters, numbers, and hyphens.');
-      idInput.focus();
-      return;
-    }
+    if (!name) return;
 
     const bars = options.getProgressBars?.() ?? options.progressBars;
+    const id = slugifyProgressBarId(name, new Set(bars.map((bar) => bar.id)));
     const existing = bars.find((bar) => bar.id === id);
     if (existing) {
       const next = { ...existing, name };

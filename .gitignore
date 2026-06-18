@@ -8,6 +8,8 @@ public/css/
 
 # Runtime game data (user content, uploads, etc.)
 backend/data/games/
+backend/data/accounts.json
+backend/data/users/
 
 # Removed Vite frontend artifacts
 frontend/dist/

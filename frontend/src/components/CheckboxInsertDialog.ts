@@ -1,7 +1,6 @@
 import {
   buildCheckboxMarker,
   formatManagedCheckboxLabel,
-  SLUG_ID_PATTERN,
   slugifyCheckboxId,
 } from '../markdown/managedCheckboxes.js';
 import { renderListSearchBar, wireListSearch } from './listSearch.js';
@@ -63,18 +62,7 @@ export function openCheckboxInsertDialog(options: {
           <span class="label">Label</span>
           <input type="text" id="checkbox-label" class="input" placeholder="e.g. Defeat the boss" required />
         </label>
-        <label class="block">
-          <span class="label">Checkbox id</span>
-          <input
-            type="text"
-            id="checkbox-id"
-            class="input"
-            placeholder="e.g. defeat-boss"
-            pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-            required
-          />
-          <p class="hint mt-1">Lowercase letters, numbers, and hyphens only.</p>
-        </label>
+        <p class="hint">The marker id is generated from the label.</p>
         <p id="checkbox-insert-error" class="text-sm text-red-400 hidden"></p>
         <div class="flex flex-wrap gap-2">
           <button type="button" class="btn-primary" data-action="insert-new">${iconLabel('checkbox', 'Insert')}</button>
@@ -86,10 +74,7 @@ export function openCheckboxInsertDialog(options: {
 
   const listSearch = wireListSearch(overlay);
   const labelInput = overlay.querySelector('#checkbox-label') as HTMLInputElement;
-  const idInput = overlay.querySelector('#checkbox-id') as HTMLInputElement;
   const errorEl = overlay.querySelector('#checkbox-insert-error') as HTMLElement;
-  const existingIds = new Set(options.checkboxes.map((checkbox) => checkbox.id));
-  let idTouched = false;
 
   const close = () => {
     listSearch.cleanup();
@@ -116,13 +101,6 @@ export function openCheckboxInsertDialog(options: {
     close();
   };
 
-  const maybeSuggestId = () => {
-    if (idTouched || idInput.value.trim()) return;
-    const label = labelInput.value.trim();
-    if (!label) return;
-    idInput.value = slugifyCheckboxId(label, existingIds);
-  };
-
   overlay.querySelectorAll('[data-action="close"]').forEach((button) => {
     button.addEventListener('click', close);
   });
@@ -139,26 +117,15 @@ export function openCheckboxInsertDialog(options: {
     });
   });
 
-  labelInput.addEventListener('blur', maybeSuggestId);
-  idInput.addEventListener('input', () => {
-    idTouched = true;
-    clearError();
-  });
   labelInput.addEventListener('input', clearError);
 
   overlay.querySelector('[data-action="insert-new"]')?.addEventListener('click', () => {
     clearError();
 
     const label = labelInput.value.trim();
-    const id = idInput.value.trim();
-    if (!label || !id) return;
+    if (!label) return;
 
-    if (!SLUG_ID_PATTERN.test(id)) {
-      showError('Checkbox id must use lowercase letters, numbers, and hyphens.');
-      idInput.focus();
-      return;
-    }
-
+    const id = slugifyCheckboxId(label, new Set(options.checkboxes.map((checkbox) => checkbox.id)));
     const existing = options.checkboxes.find((checkbox) => checkbox.id === id);
     if (existing) {
       insertForCheckbox(existing, label);

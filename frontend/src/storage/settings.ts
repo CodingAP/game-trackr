@@ -1,6 +1,17 @@
-import type { ImageViewportSettings, ThemeId } from '../types/index.js';
-import { THEME_OPTIONS } from '../types/index.js';
-import { applyFavicon } from '../utils/favicon.js';
+import type { ImageViewportSettings } from '../types/index.js';
+import { applyThemeSettings } from '../theme/applyTheme.js';
+import {
+  createThemeSettingsFromPreset,
+  DEFAULT_THEME_PRESET,
+  getThemePreset,
+} from '../theme/presets.js';
+import {
+  normalizeThemeSettings,
+  parseStoredThemeSettings,
+  serializeThemeSettings,
+} from '../theme/storage.js';
+import type { ThemeColors, ThemePresetId, ThemeSettings } from '../theme/types.js';
+import { notifyLocalDataChanged } from './localDataEvents.js';
 
 const IMAGE_STORAGE_KEY = 'game-tracking:image-viewport';
 const THEME_STORAGE_KEY = 'game-tracking:theme';
@@ -13,8 +24,6 @@ const IMAGE_DEFAULTS: ImageViewportSettings = {
   scaleToFit: false,
   maintainAspectRatio: false,
 };
-
-const DEFAULT_THEME: ThemeId = 'dark';
 
 export function getImageViewportSettings(): ImageViewportSettings {
   try {
@@ -42,30 +51,41 @@ export function saveImageViewportSettings(settings: ImageViewportSettings): Imag
     maintainAspectRatio: settings.maintainAspectRatio,
   };
   localStorage.setItem(IMAGE_STORAGE_KEY, JSON.stringify(normalized));
+  notifyLocalDataChanged();
   return normalized;
 }
 
-export function getTheme(): ThemeId {
-  const stored = localStorage.getItem(THEME_STORAGE_KEY);
-  if (stored && THEME_OPTIONS.some((theme) => theme.id === stored)) {
-    return stored as ThemeId;
-  }
-  return DEFAULT_THEME;
+export function getThemeSettings(): ThemeSettings {
+  return parseStoredThemeSettings(localStorage.getItem(THEME_STORAGE_KEY));
 }
 
-export function saveTheme(theme: ThemeId): ThemeId {
-  localStorage.setItem(THEME_STORAGE_KEY, theme);
-  applyTheme(theme);
-  return theme;
+export function saveThemeSettings(settings: ThemeSettings): ThemeSettings {
+  const normalized = normalizeThemeSettings(settings);
+  localStorage.setItem(THEME_STORAGE_KEY, serializeThemeSettings(normalized));
+  applyThemeSettings(normalized);
+  notifyLocalDataChanged();
+  return normalized;
 }
 
-export function applyTheme(theme: ThemeId): void {
-  document.documentElement.dataset.theme = theme;
-  applyFavicon(theme);
+export function saveThemePreset(presetId: ThemePresetId): ThemeSettings {
+  return saveThemeSettings(createThemeSettingsFromPreset(presetId));
+}
+
+export function saveCustomThemeColors(colors: ThemeColors): ThemeSettings {
+  return saveThemeSettings({
+    presetId: 'custom',
+    colors,
+  });
 }
 
 export function initTheme(): void {
-  applyTheme(getTheme());
+  const raw = localStorage.getItem(THEME_STORAGE_KEY);
+  const settings = parseStoredThemeSettings(raw);
+  applyThemeSettings(settings);
+
+  if (raw && !raw.trim().startsWith('{')) {
+    localStorage.setItem(THEME_STORAGE_KEY, serializeThemeSettings(settings));
+  }
 }
 
 export function getHideImages(): boolean {
@@ -75,6 +95,7 @@ export function getHideImages(): boolean {
 export function saveHideImages(hide: boolean): boolean {
   localStorage.setItem(HIDE_IMAGES_STORAGE_KEY, hide ? 'true' : 'false');
   applyHideImages(hide);
+  notifyLocalDataChanged();
   return hide;
 }
 
@@ -107,3 +128,5 @@ function normalizeDimension(value: unknown, fallback: number): number {
   if (!Number.isFinite(parsed) || parsed < 1) return fallback;
   return Math.round(parsed);
 }
+
+export { DEFAULT_THEME_PRESET, getThemePreset };

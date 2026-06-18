@@ -100,8 +100,6 @@ export interface GameMap {
   name: string;
   imageUrl: string;
   imageFilename: string;
-  viewport: MapViewport;
-  start: MapScrollPosition;
   pointTypes: MapPointType[];
   points: MapPoint[];
 }
