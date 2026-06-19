@@ -24,16 +24,73 @@ import {
   type LibraryFolder,
   type LibraryFoldersState,
 } from '../storage/libraryFolders.js';
+import {
+  getSectionSortMode,
+  setSectionSortMode,
+  sortGameSlugs,
+  type GameSortMeta,
+  type LibrarySortMode,
+} from '../storage/librarySort.js';
 import { getProgress } from '../storage/progress.js';
 import { navigate } from '../router.js';
 import { icon, iconLabel } from '../components/icons.js';
 import type { GameMeta } from '../types/index.js';
+import { getEarliestReleaseSortKey } from '../utils/mobyReleaseDate.js';
 
 interface GameCardData {
   slug: string;
   name: string;
   progressLabel: string;
   mobyHtml: string;
+  releaseDateSortKey: number;
+}
+
+const LIBRARY_SORT_SECTION = 'library';
+
+function renderLibrarySortSelect(sectionId: string, currentMode: LibrarySortMode): string {
+  const options: { value: LibrarySortMode; label: string }[] = [
+    { value: 'name', label: 'Name' },
+    { value: 'release-date', label: 'Release date' },
+    { value: 'added', label: 'Date added' },
+  ];
+
+  return `
+    <label class="library-sort">
+      <span class="label library-sort-label">Sort</span>
+      <select class="input library-sort-select" data-library-sort="${escapeHtml(sectionId)}" aria-label="Sort games">
+        ${options
+          .map(
+            (option) =>
+              `<option value="${option.value}" ${option.value === currentMode ? 'selected' : ''}>${option.label}</option>`,
+          )
+          .join('')}
+      </select>
+    </label>
+  `;
+}
+
+function buildSortMeta(games: GameMeta[], cards: Map<string, GameCardData>): Map<string, GameSortMeta> {
+  const meta = new Map<string, GameSortMeta>();
+
+  for (const game of games) {
+    const card = cards.get(game.slug);
+    meta.set(game.slug, {
+      slug: game.slug,
+      name: card?.name ?? game.name,
+      createdAt: game.createdAt,
+      releaseDateSortKey: card?.releaseDateSortKey ?? Number.MAX_SAFE_INTEGER,
+    });
+  }
+
+  return meta;
+}
+
+function sortSlugsForSection(
+  slugs: string[],
+  sectionId: string,
+  sortMeta: Map<string, GameSortMeta>,
+): string[] {
+  return sortGameSlugs(slugs, sortMeta, getSectionSortMode(sectionId));
 }
 
 function escapeHtml(value: string): string {
@@ -96,6 +153,7 @@ async function buildGameCards(games: GameMeta[]): Promise<Map<string, GameCardDa
     games.map(async (game) => {
       let progressLabel = 'No progress yet';
       let mobyHtml = '';
+      let releaseDateSortKey = Number.MAX_SAFE_INTEGER;
 
       const [checkboxesResult, mobyResult] = await Promise.allSettled([
         fetchCheckboxConnections(game.slug),
@@ -104,6 +162,7 @@ async function buildGameCards(games: GameMeta[]): Promise<Map<string, GameCardDa
 
       if (mobyResult.status === 'fulfilled' && mobyResult.value.info) {
         mobyHtml = renderLibraryMobyHtml(mobyResult.value.info);
+        releaseDateSortKey = getEarliestReleaseSortKey(mobyResult.value.info);
       }
 
       if (checkboxesResult.status === 'fulfilled') {
@@ -131,6 +190,7 @@ async function buildGameCards(games: GameMeta[]): Promise<Map<string, GameCardDa
         name: game.name,
         progressLabel,
         mobyHtml,
+        releaseDateSortKey,
       } satisfies GameCardData;
     }),
   );
@@ -217,12 +277,19 @@ function renderFolderSection(
   signedIn: boolean,
   folders: LibraryFolder[],
   folderState: LibraryFoldersState,
+  sortMeta: Map<string, GameSortMeta>,
 ): string {
-  const count = folder.gameSlugs.length;
+  const sortedSlugs = sortSlugsForSection(folder.gameSlugs, folder.id, sortMeta);
+  const count = sortedSlugs.length;
   const collapsed = isFolderCollapsed(folderState, folder.id);
+  const sortMode = getSectionSortMode(folder.id);
   const deleteButton = signedIn
     ? `<button type="button" class="btn-secondary" data-delete-folder="${escapeHtml(folder.id)}" aria-label="Delete folder">${icon('trash', 'ui-icon ui-icon-sm')}</button>`
     : '';
+  const titleActions = `
+    ${renderLibrarySortSelect(folder.id, sortMode)}
+    ${deleteButton}
+  `;
 
   return renderCollapsiblePanel({
     title: folder.name,
@@ -235,8 +302,8 @@ function renderFolderSection(
       <span class="library-folder-title">${icon('library', 'ui-icon ui-icon-sm library-folder-icon')}${escapeHtml(folder.name)}</span>
       <span class="library-folder-count">${count}</span>
     `,
-    titleActions: deleteButton,
-    content: renderGameGrid(folder.gameSlugs, cards, signedIn, folders, folderState),
+    titleActions,
+    content: renderGameGrid(sortedSlugs, cards, signedIn, folders, folderState),
   });
 }
 
@@ -247,25 +314,30 @@ function renderUncategorizedSection(
   folders: LibraryFolder[],
   folderState: LibraryFoldersState,
   hasFolders: boolean,
+  sortMeta: Map<string, GameSortMeta>,
 ): string {
   if (slugs.length === 0) return '';
 
-  const content = renderGameGrid(slugs, cards, signedIn, folders, folderState);
+  const sectionId = hasFolders ? 'uncategorized' : LIBRARY_SORT_SECTION;
+  const sortedSlugs = sortSlugsForSection(slugs, sectionId, sortMeta);
+  const content = renderGameGrid(sortedSlugs, cards, signedIn, folders, folderState);
   if (!hasFolders) return content;
 
-  const collapsed = isFolderCollapsed(folderState, 'uncategorized');
+  const collapsed = isFolderCollapsed(folderState, sectionId);
+  const sortMode = getSectionSortMode(sectionId);
 
   return renderCollapsiblePanel({
     title: 'Uncategorized',
     className: 'library-folder-panel library-folder-panel-uncategorized',
     defaultOpen: !collapsed,
     attributes: {
-      'library-folder-id': 'uncategorized',
+      'library-folder-id': sectionId,
     },
     titleHtml: `
       <span class="library-folder-title">${escapeHtml('Uncategorized')}</span>
-      <span class="library-folder-count">${slugs.length}</span>
+      <span class="library-folder-count">${sortedSlugs.length}</span>
     `,
+    titleActions: renderLibrarySortSelect(sectionId, sortMode),
     content,
   });
 }
@@ -279,10 +351,11 @@ function renderLibraryBody(options: {
   const { games, cards, signedIn, folderState } = options;
   const folders = folderState.folders;
   const hasFolders = folders.length > 0;
+  const sortMeta = buildSortMeta(games, cards);
   const uncategorizedSlugs = getUncategorizedSlugs(folderState, games);
 
   const folderSections = folders
-    .map((folder) => renderFolderSection(folder, cards, signedIn, folders, folderState))
+    .map((folder) => renderFolderSection(folder, cards, signedIn, folders, folderState, sortMeta))
     .join('');
 
   const uncategorizedSection = renderUncategorizedSection(
@@ -292,6 +365,7 @@ function renderLibraryBody(options: {
     folders,
     folderState,
     hasFolders,
+    sortMeta,
   );
 
   if (!hasFolders) {
@@ -460,13 +534,33 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
         button.removeEventListener('click', handler);
         button.addEventListener('click', handler);
       });
+
+      container.querySelectorAll('[data-library-sort]').forEach((select) => {
+        const element = select as HTMLSelectElement;
+        const handler = () => {
+          const sectionId = element.dataset.librarySort;
+          if (!sectionId) return;
+          setSectionSortMode(sectionId, element.value as LibrarySortMode);
+          paint();
+        };
+        element.removeEventListener('change', handler);
+        element.addEventListener('change', handler);
+      });
     };
 
     const paint = () => {
       const body = renderLibraryBody({ games, cards, signedIn, folderState });
+      const hasFolders = folderState.folders.length > 0;
+      const librarySortHtml = hasFolders
+        ? ''
+        : renderLibrarySortSelect(LIBRARY_SORT_SECTION, getSectionSortMode(LIBRARY_SORT_SECTION));
       const libraryBody = container.querySelector('#library-body');
       if (libraryBody) {
         libraryBody.innerHTML = body;
+        const sortHost = container.querySelector('#library-sort-host');
+        if (sortHost) {
+          sortHost.innerHTML = librarySortHtml;
+        }
         wireInteractions();
         return;
       }
@@ -477,6 +571,7 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
             <div>
               <h1 class="page-heading mb-1">Game Library</h1>
               <p class="text-muted">Pick a journal to track your completion progress.</p>
+              <div id="library-sort-host" class="library-sort-host">${librarySortHtml}</div>
             </div>
             ${renderLibraryHeaderActions(signedIn, true)}
           </div>

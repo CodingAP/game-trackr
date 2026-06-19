@@ -1,6 +1,7 @@
 import { renderCollapsiblePanel } from './CollapsiblePanel.js';
 import { getPlatformIconSlug, getPlatformIconUrl } from '../platformIcons.js';
 import type { MobyGamesGameInfo, MobyGamesPlatformInfo } from '../types/index.js';
+import { parseReleaseDateSortKey } from '../utils/mobyReleaseDate.js';
 import { formatDescriptionHtml, descriptionToPlainText, truncatePlainText } from '../utils/sanitizeHtml.js';
 
 function escapeHtml(value: string): string {
@@ -9,19 +10,6 @@ function escapeHtml(value: string): string {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
-}
-
-function parseReleaseDateSortKey(date: string | null): number {
-  if (!date) return Number.MAX_SAFE_INTEGER;
-
-  const parts = date.trim().split('-');
-  const year = Number(parts[0]);
-  if (!Number.isFinite(year)) return Number.MAX_SAFE_INTEGER;
-
-  const month = parts.length > 1 ? Number(parts[1]) : 1;
-  const safeMonth = Number.isFinite(month) ? month : 1;
-
-  return year * 100 + safeMonth;
 }
 
 function sortPlatformsByRelease(platforms: MobyGamesPlatformInfo[]): MobyGamesPlatformInfo[] {

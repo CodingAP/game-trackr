@@ -379,6 +379,26 @@
     @apply min-w-0 sm:w-48;
   }
 
+  .library-sort-host {
+    @apply mt-3;
+  }
+
+  .library-sort {
+    @apply inline-flex items-center gap-2;
+  }
+
+  .library-sort-label {
+    @apply mb-0 shrink-0 text-xs uppercase tracking-wide;
+  }
+
+  .library-sort-select {
+    @apply min-w-0 py-1 text-sm;
+  }
+
+  .collapsible-panel-actions .library-sort-select {
+    @apply w-32;
+  }
+
   .library-folder-list {
     @apply min-w-0;
   }

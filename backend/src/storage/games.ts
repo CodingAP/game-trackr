@@ -43,7 +43,7 @@ const EMPTY_CHECKBOXES: CheckboxConnectionsData = { checkboxes: [] };
 const EMPTY_IMAGE_LIBRARY: ImageLibraryData = { images: [] };
 const EMPTY_MAPS: GameMapsData = { maps: [] };
 const DEFAULT_MAIN_PAGE_ID = 'main';
-const DEFAULT_CONTENT = '# New Game\n\n- [[cb:goal-1]] Add your first goal\n';
+const DEFAULT_CONTENT = '# New Game\n';
 const DEFAULT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const IMAGE_MIME_BY_EXT: Record<string, string> = {
@@ -213,16 +213,7 @@ export async function createGame(
     version: 2,
     pages: [{ id: DEFAULT_MAIN_PAGE_ID, name: 'Main', order: 0 }],
   };
-  const checkboxes: CheckboxConnectionsData = {
-    checkboxes: [
-      {
-        id: 'goal-1',
-        label: 'Add your first goal',
-        parentId: null,
-        tagIds: [],
-      },
-    ],
-  };
+  const checkboxes: CheckboxConnectionsData = structuredClone(EMPTY_CHECKBOXES);
 
   await fs.mkdir(imagesDir(slug), { recursive: true });
   await fs.mkdir(pagesDir(dir), { recursive: true });

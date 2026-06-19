@@ -59,7 +59,7 @@ import { renderEditorTabHelp, wireEditorTabHelp } from '../components/editorTabH
 import { wireReturnToTop } from '../components/ReturnToTop.js';
 import { icon, iconLabel } from '../components/icons.js';
 
-const DEFAULT_CONTENT = '# New Game\n\n- [[cb:goal-1]] Add your first goal\n';
+const DEFAULT_CONTENT = '# New Game\n';
 
 const DEFAULT_JOURNAL: FullJournalData = {
   version: 2,
@@ -67,16 +67,7 @@ const DEFAULT_JOURNAL: FullJournalData = {
   contents: { main: DEFAULT_CONTENT },
 };
 
-const DEFAULT_CHECKBOXES: CheckboxConnectionsData = {
-  checkboxes: [
-    {
-      id: 'goal-1',
-      label: 'Add your first goal',
-      parentId: null,
-      tagIds: [],
-    },
-  ],
-};
+const DEFAULT_CHECKBOXES: CheckboxConnectionsData = { checkboxes: [] };
 
 const EMPTY_PROGRESS_BARS: ProgressBarsData = { tags: [] };
 const EMPTY_MAPS: GameMapsData = { maps: [] };
