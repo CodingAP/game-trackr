@@ -6,6 +6,7 @@ import {
 } from '../api/client.js';
 import { renderImportGameControls, wireImportGameButton } from '../components/ImportGameButton.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from '../components/CollapsiblePanel.js';
+import { openFolderDeleteDialog } from '../components/FolderDeleteDialog.js';
 import { renderLibraryMobyHtml } from '../components/GameInfoPanel.js';
 import { getProgressCheckboxes, isCheckboxComplete, buildCheckboxIndex } from '../markdown/checkboxes.js';
 import { managedToCheckboxItems } from '../markdown/managedCheckboxes.js';
@@ -19,6 +20,7 @@ import {
   isFolderCollapsed,
   pruneLibraryFolders,
   removeLibraryFolder,
+  renameLibraryFolder,
   saveLibraryFolders,
   setFolderCollapsed,
   type LibraryFolder,
@@ -283,12 +285,15 @@ function renderFolderSection(
   const count = sortedSlugs.length;
   const collapsed = isFolderCollapsed(folderState, folder.id);
   const sortMode = getSectionSortMode(folder.id);
-  const deleteButton = signedIn
-    ? `<button type="button" class="btn-secondary" data-delete-folder="${escapeHtml(folder.id)}" aria-label="Delete folder">${icon('trash', 'ui-icon ui-icon-sm')}</button>`
+  const folderActions = signedIn
+    ? `
+      <button type="button" class="btn-secondary" data-rename-folder="${escapeHtml(folder.id)}" aria-label="Rename folder">${icon('edit', 'ui-icon ui-icon-sm')}</button>
+      <button type="button" class="btn-secondary" data-delete-folder="${escapeHtml(folder.id)}" aria-label="Delete folder">${icon('trash', 'ui-icon ui-icon-sm')}</button>
+    `
     : '';
   const titleActions = `
     ${renderLibrarySortSelect(folder.id, sortMode)}
-    ${deleteButton}
+    ${folderActions}
   `;
 
   return renderCollapsiblePanel({
@@ -420,44 +425,46 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
       }
     };
 
-    const deleteFolderWithGames = async (folderId: string) => {
+    const deleteFolder = async (folderId: string) => {
       const folder = folderState.folders.find((entry) => entry.id === folderId);
       if (!folder) return;
 
-      const count = folder.gameSlugs.length;
-      const message =
-        count === 0
-          ? `Delete folder "${folder.name}"?`
-          : `Delete folder "${folder.name}" and all ${count} game(s) inside? This cannot be undone.`;
+      const choice = await openFolderDeleteDialog(folder.name, folder.gameSlugs.length);
+      if (choice === 'cancel') return;
 
-      if (!window.confirm(message)) return;
-
-      try {
-        for (const slug of folder.gameSlugs) {
-          await deleteGame(slug);
-        }
-        removeLibraryFolder(folderId);
-        games = await fetchGames();
-        const nextValidSlugs = new Set(games.map((game) => game.slug));
-        folderState = pruneLibraryFolders(getLibraryFolders(), nextValidSlugs);
-        saveLibraryFolders(folderState);
-        if (games.length === 0) {
-          container.innerHTML = renderEmptyLibrary(signedIn);
-          if (signedIn) {
-            container.querySelector('#create-first')?.addEventListener('click', () => navigate('/editor'));
-            cleanupImport = wireImportGameButton(container);
+      if (choice === 'folder-and-games') {
+        try {
+          for (const slug of folder.gameSlugs) {
+            await deleteGame(slug);
           }
-          return;
+          removeLibraryFolder(folderId);
+          games = await fetchGames();
+          const nextValidSlugs = new Set(games.map((game) => game.slug));
+          folderState = pruneLibraryFolders(getLibraryFolders(), nextValidSlugs);
+          saveLibraryFolders(folderState);
+          if (games.length === 0) {
+            container.innerHTML = renderEmptyLibrary(signedIn);
+            if (signedIn) {
+              container.querySelector('#create-first')?.addEventListener('click', () => navigate('/editor'));
+              cleanupImport = wireImportGameButton(container);
+            }
+            return;
+          }
+          const nextCards = await buildGameCards(games);
+          cards.clear();
+          for (const [slug, card] of nextCards) {
+            cards.set(slug, card);
+          }
+          paint();
+        } catch (error) {
+          window.alert(error instanceof Error ? error.message : 'Failed to delete folder');
         }
-        const nextCards = await buildGameCards(games);
-        cards.clear();
-        for (const [slug, card] of nextCards) {
-          cards.set(slug, card);
-        }
-        paint();
-      } catch (error) {
-        window.alert(error instanceof Error ? error.message : 'Failed to delete folder');
+        return;
       }
+
+      removeLibraryFolder(folderId);
+      folderState = getLibraryFolders();
+      paint();
     };
 
     const wireInteractions = () => {
@@ -527,9 +534,29 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
         element.addEventListener('change', handler);
       });
 
+      container.querySelectorAll('[data-rename-folder]').forEach((button) => {
+        const handler = () => {
+          const folderId = (button as HTMLElement).dataset.renameFolder ?? '';
+          const folder = folderState.folders.find((entry) => entry.id === folderId);
+          if (!folder) return;
+
+          const nextName = window.prompt('Folder name:', folder.name);
+          if (nextName === null) return;
+
+          const trimmed = nextName.trim();
+          if (!trimmed || trimmed === folder.name) return;
+
+          renameLibraryFolder(folderId, trimmed);
+          folderState = getLibraryFolders();
+          paint();
+        };
+        button.removeEventListener('click', handler);
+        button.addEventListener('click', handler);
+      });
+
       container.querySelectorAll('[data-delete-folder]').forEach((button) => {
         const handler = () => {
-          void deleteFolderWithGames((button as HTMLElement).dataset.deleteFolder ?? '');
+          void deleteFolder((button as HTMLElement).dataset.deleteFolder ?? '');
         };
         button.removeEventListener('click', handler);
         button.addEventListener('click', handler);

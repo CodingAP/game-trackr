@@ -19,6 +19,8 @@ import {
   readMaps,
   readMobyGamesInfo,
   readMobyGamesLink,
+  readMobyGamesStore,
+  updateMobyGamesCachedInfo,
   writeCheckboxes,
   writeCompletionTags,
   writeContent,
@@ -276,11 +278,8 @@ router.get('/:slug/mobygames', async (req, res) => {
   }
 
   if (!isMobyGamesConfigured()) {
-    res.status(503).json({
-      error: 'MobyGames API key is not configured. Set MOBYGAMES_API_KEY.',
-      link,
-      info: null,
-    });
+    const store = await readMobyGamesStore(slug);
+    res.json({ configured: false, link, info: store?.cachedInfo ?? null });
     return;
   }
 
@@ -447,6 +446,29 @@ router.put('/:slug/completion-tags', requireAuth, async (req, res) => {
 
   const updated = await writeCompletionTags(slug, body);
   res.json(updated);
+});
+
+router.patch('/:slug/mobygames/cache', requireAuth, async (req, res) => {
+  const slug = readSlug(req);
+  const game = await getGame(slug);
+  if (!game) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  const link = await readMobyGamesLink(slug);
+  if (!link) {
+    res.status(400).json({ error: 'No MobyGames entry linked to this game' });
+    return;
+  }
+
+  try {
+    const info = await updateMobyGamesCachedInfo(slug, req.body ?? {});
+    res.json({ info });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update MobyGames cache';
+    res.status(400).json({ error: message });
+  }
 });
 
 router.put('/:slug/mobygames', requireAuth, async (req, res) => {

@@ -168,7 +168,6 @@ export interface MobyGamesGameInfo {
   title: string;
   description: string | null;
   mobyUrl: string;
-  officialUrl: string | null;
   mobyScore: number | null;
   numVotes: number | null;
   coverUrl: string | null;
@@ -183,6 +182,8 @@ export interface MobyGamesGameResponse {
   link: MobyGamesLink | null;
   info: MobyGamesGameInfo | null;
 }
+
+export type MobyGamesCacheUpdate = Partial<Omit<MobyGamesGameInfo, 'gameId'>>;
 
 export const JOURNAL_EXPORT_VERSION = 2;
 export const JOURNAL_EXPORT_VERSION_LEGACY = 1;

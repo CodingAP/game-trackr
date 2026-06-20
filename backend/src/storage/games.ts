@@ -33,6 +33,7 @@ import {
 interface MobyGamesStore extends MobyGamesLink {
   cachedInfo?: MobyGamesGameInfo;
   cachedAt?: string;
+  cacheEdited?: boolean;
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -397,6 +398,7 @@ export async function writeMobyGamesLink(
     linkedAt: now,
     cachedInfo: info,
     cachedAt: info ? now : undefined,
+    cacheEdited: false,
   };
 
   await writeMobyGamesStore(slug, store);
@@ -405,7 +407,11 @@ export async function writeMobyGamesLink(
   return { gameId, linkedAt: now };
 }
 
-async function writeMobyGamesCache(slug: string, info: MobyGamesGameInfo): Promise<void> {
+async function writeMobyGamesCache(
+  slug: string,
+  info: MobyGamesGameInfo,
+  options: { fromApi?: boolean } = {},
+): Promise<void> {
   const store = await readMobyGamesStore(slug);
   if (!store) return;
 
@@ -413,7 +419,119 @@ async function writeMobyGamesCache(slug: string, info: MobyGamesGameInfo): Promi
     ...store,
     cachedInfo: info,
     cachedAt: new Date().toISOString(),
+    cacheEdited: options.fromApi ? false : store.cacheEdited,
   });
+}
+
+export type MobyGamesCacheUpdate = Partial<Omit<MobyGamesGameInfo, 'gameId'>>;
+
+function normalizeMobyGamesPlatforms(
+  platforms: unknown,
+): MobyGamesGameInfo['platforms'] {
+  if (!Array.isArray(platforms)) return [];
+
+  return platforms
+    .filter((platform): platform is { name?: unknown; releaseDate?: unknown } => Boolean(platform))
+    .map((platform) => ({
+      name: typeof platform.name === 'string' ? platform.name.trim() : '',
+      releaseDate:
+        typeof platform.releaseDate === 'string'
+          ? platform.releaseDate.trim() || null
+          : platform.releaseDate === null
+            ? null
+            : null,
+    }))
+    .filter((platform) => platform.name.length > 0);
+}
+
+function normalizeMobyGamesStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+export async function updateMobyGamesCachedInfo(
+  slug: string,
+  updates: MobyGamesCacheUpdate,
+): Promise<MobyGamesGameInfo> {
+  const store = await readMobyGamesStore(slug);
+  if (!store?.cachedInfo) {
+    throw new Error('No cached MobyGames info to update');
+  }
+
+  const current = store.cachedInfo;
+  const next: MobyGamesGameInfo = {
+    gameId: store.gameId,
+    title:
+      typeof updates.title === 'string' && updates.title.trim()
+        ? updates.title.trim()
+        : current.title,
+    description:
+      updates.description === undefined
+        ? current.description
+        : typeof updates.description === 'string'
+          ? updates.description
+          : updates.description === null
+            ? null
+            : current.description,
+    mobyUrl:
+      typeof updates.mobyUrl === 'string' && updates.mobyUrl.trim()
+        ? updates.mobyUrl.trim()
+        : current.mobyUrl,
+    mobyScore:
+      updates.mobyScore === undefined
+        ? current.mobyScore
+        : typeof updates.mobyScore === 'number' && Number.isFinite(updates.mobyScore)
+          ? updates.mobyScore
+          : updates.mobyScore === null
+            ? null
+            : current.mobyScore,
+    numVotes:
+      updates.numVotes === undefined
+        ? current.numVotes
+        : typeof updates.numVotes === 'number' && Number.isFinite(updates.numVotes)
+          ? updates.numVotes
+          : updates.numVotes === null
+            ? null
+            : current.numVotes,
+    coverUrl:
+      updates.coverUrl === undefined
+        ? current.coverUrl
+        : typeof updates.coverUrl === 'string'
+          ? updates.coverUrl.trim() || null
+          : updates.coverUrl === null
+            ? null
+            : current.coverUrl,
+    coverThumbnailUrl:
+      updates.coverThumbnailUrl === undefined
+        ? current.coverThumbnailUrl
+        : typeof updates.coverThumbnailUrl === 'string'
+          ? updates.coverThumbnailUrl.trim() || null
+          : updates.coverThumbnailUrl === null
+            ? null
+            : current.coverThumbnailUrl,
+    genres:
+      updates.genres === undefined ? current.genres : normalizeMobyGamesStringArray(updates.genres),
+    platforms:
+      updates.platforms === undefined
+        ? current.platforms
+        : normalizeMobyGamesPlatforms(updates.platforms),
+    alternateTitles:
+      updates.alternateTitles === undefined
+        ? current.alternateTitles
+        : normalizeMobyGamesStringArray(updates.alternateTitles),
+  };
+
+  await writeMobyGamesStore(slug, {
+    ...store,
+    cachedInfo: next,
+    cachedAt: new Date().toISOString(),
+    cacheEdited: true,
+  });
+  await touchGameUpdatedAt(slug);
+  return next;
 }
 
 export async function deleteMobyGamesLink(slug: string): Promise<void> {
@@ -433,13 +551,13 @@ export async function readMobyGamesInfo(
   const store = await readMobyGamesStore(slug);
   if (!store) return null;
 
-  if (!options.refresh && isCacheFresh(store) && store.cachedInfo) {
+  if (!options.refresh && store.cachedInfo && (store.cacheEdited || isCacheFresh(store))) {
     return store.cachedInfo;
   }
 
   try {
     const info = await fetchMobyGameInfo(store.gameId);
-    await writeMobyGamesCache(slug, info);
+    await writeMobyGamesCache(slug, info, { fromApi: true });
     return info;
   } catch (error) {
     if (store.cachedInfo) {

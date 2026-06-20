@@ -113,9 +113,7 @@ export function importLocalData(json: string, options?: { replaceMissingKeys?: b
 
   for (const key of LOCAL_STORAGE_KEYS) {
     if (!(key in backup.data)) {
-      if (replaceMissingKeys) {
-        localStorage.removeItem(key);
-      }
+      // Keys omitted from a backup keep their existing local values.
       continue;
     }
 

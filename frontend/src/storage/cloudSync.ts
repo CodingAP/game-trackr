@@ -80,6 +80,7 @@ export async function pullCloudBackupToLocal(): Promise<'applied' | 'uploaded' |
     applyingCloudData = true;
     try {
       importLocalData(JSON.stringify(cloud.backup), { replaceMissingKeys: true });
+      await uploadCloudBackup(exportLocalData());
     } finally {
       applyingCloudData = false;
     }

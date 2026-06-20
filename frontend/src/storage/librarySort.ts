@@ -76,7 +76,9 @@ export function getSectionSortMode(sectionId: string): LibrarySortMode {
 
 export function setSectionSortMode(sectionId: string, mode: LibrarySortMode): LibrarySortSettings {
   const settings = getLibrarySortSettings();
-  settings.sectionSort[sectionId] = normalizeMode(mode, settings.defaultSort);
+  const normalized = normalizeMode(mode, settings.defaultSort);
+  settings.sectionSort[sectionId] = normalized;
+  settings.defaultSort = normalized;
   return saveLibrarySortSettings(settings);
 }
 

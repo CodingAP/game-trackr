@@ -1602,6 +1602,21 @@
     color: rgb(var(--text-faint));
   }
 
+  .mobygames-edit-form {
+    @apply mt-4 rounded-lg border p-3;
+    border-color: rgb(var(--border-subtle));
+    background-color: rgb(var(--surface-muted) / 0.2);
+  }
+
+  .mobygames-platform-list {
+    @apply min-w-0;
+  }
+
+  .mobygames-platform-row {
+    @apply flex flex-wrap items-end gap-2 rounded-lg border p-2;
+    border-color: rgb(var(--border-subtle));
+  }
+
   .completion-summary {
     @apply mb-6;
   }

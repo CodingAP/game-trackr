@@ -16,6 +16,7 @@ import type {
   ImageLibraryData,
   ImportGameRequest,
   JournalExportBundle,
+  MobyGamesCacheUpdate,
   MobyGamesGameInfo,
   MobyGamesGameResponse,
   MobyGamesSearchHit,
@@ -369,8 +370,12 @@ export async function searchMobyGames(title: string, limit = 20): Promise<MobyGa
   return response.results;
 }
 
-export async function fetchMobyGamesForGame(slug: string): Promise<MobyGamesGameResponse> {
-  const response = await fetch(`/api/games/${slug}/mobygames`);
+export async function fetchMobyGamesForGame(
+  slug: string,
+  options: { refresh?: boolean } = {},
+): Promise<MobyGamesGameResponse> {
+  const params = options.refresh ? '?refresh=1' : '';
+  const response = await fetch(`/api/games/${slug}/mobygames${params}`);
   const body = await response.json().catch(() => ({ error: response.statusText }));
   if (!response.ok && response.status !== 503) {
     throw new Error(body.error ?? 'Failed to load MobyGames info');
@@ -380,6 +385,22 @@ export async function fetchMobyGamesForGame(slug: string): Promise<MobyGamesGame
     link: body.link ?? null,
     info: body.info ?? null,
   };
+}
+
+export async function updateMobyGamesCache(
+  slug: string,
+  updates: MobyGamesCacheUpdate,
+): Promise<MobyGamesGameInfo> {
+  const response = await request<{ info: MobyGamesGameInfo }>(
+    `/api/games/${slug}/mobygames/cache`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    },
+    true,
+  );
+  return response.info;
 }
 
 export async function linkMobyGamesEntry(

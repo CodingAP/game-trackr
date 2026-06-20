@@ -16,7 +16,6 @@ export interface MobyGamesGameInfo {
   title: string;
   description: string | null;
   mobyUrl: string;
-  officialUrl: string | null;
   mobyScore: number | null;
   numVotes: number | null;
   coverUrl: string | null;
@@ -49,7 +48,6 @@ interface MobyGameRaw {
   title?: string;
   description?: string | null;
   moby_url?: string;
-  official_url?: string | null;
   moby_score?: number | null;
   num_votes?: number | null;
   sample_cover?: MobyCover | null;
@@ -109,7 +107,6 @@ function normalizeGame(raw: MobyGameRaw): MobyGamesGameInfo {
     title: raw.title,
     description: raw.description ?? null,
     mobyUrl: raw.moby_url,
-    officialUrl: raw.official_url ?? null,
     mobyScore: raw.moby_score ?? null,
     numVotes: raw.num_votes ?? null,
     coverUrl: raw.sample_cover?.image ?? null,

@@ -98,13 +98,6 @@ export function renderGameInfoHtml(info: MobyGamesGameInfo): string {
       <a href="${escapeHtml(info.mobyUrl)}" class="game-info-link" target="_blank" rel="noopener noreferrer">
         View on MobyGames
       </a>
-      ${
-        info.officialUrl
-          ? `<a href="${escapeHtml(info.officialUrl)}" class="game-info-link" target="_blank" rel="noopener noreferrer">
-              Official site
-            </a>`
-          : ''
-      }
     </div>
   `;
 

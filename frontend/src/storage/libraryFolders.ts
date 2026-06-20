@@ -104,6 +104,16 @@ export function removeLibraryFolder(folderId: string): LibraryFoldersState {
   return state;
 }
 
+export function renameLibraryFolder(folderId: string, name: string): LibraryFolder | null {
+  const state = getLibraryFolders();
+  const folder = state.folders.find((entry) => entry.id === folderId);
+  if (!folder) return null;
+
+  folder.name = name.trim() || 'Untitled folder';
+  saveLibraryFolders(state);
+  return folder;
+}
+
 export function assignGameToFolder(slug: string, folderId: string | null): LibraryFoldersState {
   const state = getLibraryFolders();
 
