@@ -1739,13 +1739,11 @@
   }
 
   .library-game-moby {
-    @apply flex gap-3;
+    @apply flex items-start gap-3;
   }
 
   .library-game-cover {
-    @apply h-28 w-[4.5rem] shrink-0 rounded-lg border object-contain object-center shadow-sm;
-    border-color: rgb(var(--border-subtle));
-    background-color: rgb(var(--surface-muted));
+    @apply block h-auto w-auto max-h-32 max-w-[5.25rem] shrink-0 rounded;
   }
 
   .library-game-description {
