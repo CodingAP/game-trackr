@@ -714,7 +714,7 @@ export async function renderEditor(
         mobyGamesHost.innerHTML =
           '<p class="text-muted text-sm">Link MobyGames after saving the game.</p>';
       } else if (activeSlug) {
-        cleanupMobyGamesAdmin = mountMobyGamesAdmin(mobyGamesHost, activeSlug);
+        cleanupMobyGamesAdmin = mountMobyGamesAdmin(mobyGamesHost, activeSlug, gameName);
       }
 
       const getEmbedContext = () => ({

@@ -272,13 +272,19 @@ router.get('/:slug/mobygames', async (req, res) => {
   }
 
   const link = await readMobyGamesLink(slug);
-  if (!link) {
+  const store = await readMobyGamesStore(slug);
+
+  if (!link && !store?.cachedInfo) {
     res.json({ configured: isMobyGamesConfigured(), link: null, info: null });
     return;
   }
 
+  if (!link) {
+    res.json({ configured: isMobyGamesConfigured(), link: null, info: store?.cachedInfo ?? null });
+    return;
+  }
+
   if (!isMobyGamesConfigured()) {
-    const store = await readMobyGamesStore(slug);
     res.json({ configured: false, link, info: store?.cachedInfo ?? null });
     return;
   }
@@ -289,7 +295,7 @@ router.get('/:slug/mobygames', async (req, res) => {
     res.json({ configured: true, link, info });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to load MobyGames info';
-    res.status(502).json({ error: message, link, info: null });
+    res.status(502).json({ error: message, link, info: store?.cachedInfo ?? null });
   }
 });
 
@@ -456,17 +462,11 @@ router.patch('/:slug/mobygames/cache', requireAuth, async (req, res) => {
     return;
   }
 
-  const link = await readMobyGamesLink(slug);
-  if (!link) {
-    res.status(400).json({ error: 'No MobyGames entry linked to this game' });
-    return;
-  }
-
   try {
-    const info = await updateMobyGamesCachedInfo(slug, req.body ?? {});
+    const info = await updateMobyGamesCachedInfo(slug, req.body ?? {}, { defaultTitle: game.name });
     res.json({ info });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to update MobyGames cache';
+    const message = error instanceof Error ? error.message : 'Failed to update game info cache';
     res.status(400).json({ error: message });
   }
 });

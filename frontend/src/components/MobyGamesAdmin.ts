@@ -40,6 +40,22 @@ function renderPlatformRow(platform: MobyGamesPlatformInfo): string {
   `;
 }
 
+function createEmptyGameInfo(title: string): MobyGamesGameInfo {
+  return {
+    gameId: 0,
+    title: title.trim() || 'Untitled',
+    description: null,
+    mobyUrl: '',
+    mobyScore: null,
+    numVotes: null,
+    coverUrl: null,
+    coverThumbnailUrl: null,
+    genres: [],
+    platforms: [],
+    alternateTitles: [],
+  };
+}
+
 function renderMobyGamesEditForm(info: MobyGamesGameInfo): string {
   const platformRows =
     info.platforms.length > 0
@@ -48,7 +64,7 @@ function renderMobyGamesEditForm(info: MobyGamesGameInfo): string {
 
   return `
     <form id="moby-edit-form" class="mobygames-edit-form space-y-3">
-      <p class="hint">Edits are saved to the local cache and shown in the viewer and library.</p>
+      <p class="hint">Saved on the server and shown in the viewer and library.</p>
       <label class="block">
         <span class="label">Title</span>
         <input type="text" id="moby-edit-title" class="input" value="${escapeHtml(info.title)}" required />
@@ -56,7 +72,7 @@ function renderMobyGamesEditForm(info: MobyGamesGameInfo): string {
       <label class="block">
         <span class="label">Description</span>
         <textarea id="moby-edit-description" class="input min-h-32 font-mono text-sm" rows="8">${escapeHtml(info.description ?? '')}</textarea>
-        <span class="hint">HTML from MobyGames is supported in the viewer.</span>
+        <span class="hint">HTML is supported in the viewer.</span>
       </label>
       <label class="block">
         <span class="label">MobyGames URL</span>
@@ -65,10 +81,6 @@ function renderMobyGamesEditForm(info: MobyGamesGameInfo): string {
       <label class="block">
         <span class="label">Cover URL</span>
         <input type="url" id="moby-edit-cover-url" class="input" value="${escapeHtml(info.coverUrl ?? '')}" />
-      </label>
-      <label class="block">
-        <span class="label">Cover thumbnail URL</span>
-        <input type="url" id="moby-edit-cover-thumb-url" class="input" value="${escapeHtml(info.coverThumbnailUrl ?? '')}" />
       </label>
       <div>
         <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -80,24 +92,28 @@ function renderMobyGamesEditForm(info: MobyGamesGameInfo): string {
         </div>
       </div>
       <div class="flex flex-wrap gap-2">
-        <button type="submit" class="btn-primary">${iconLabel('save', 'Save cache')}</button>
+        <button type="submit" class="btn-primary">${iconLabel('save', 'Save game info')}</button>
       </div>
     </form>
   `;
 }
 
-function renderLinkedState(info: MobyGamesGameInfo, configured: boolean): string {
+function renderLinkedHeader(info: MobyGamesGameInfo, configured: boolean): string {
   return `
-    <div class="mobygames-linked panel-muted">
+    <div class="mobygames-linked panel-muted mb-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p class="text-sm font-medium text-strong">${escapeHtml(info.title)}</p>
           <p class="text-xs text-faint mt-1">MobyGames ID: ${info.gameId}</p>
         </div>
         <div class="flex flex-wrap gap-2">
-          <a href="${escapeHtml(info.mobyUrl)}" class="btn-secondary text-xs" target="_blank" rel="noopener noreferrer">
-            ${iconLabel('external-link', 'Open on MobyGames')}
-          </a>
+          ${
+            info.mobyUrl.trim()
+              ? `<a href="${escapeHtml(info.mobyUrl)}" class="btn-secondary text-xs" target="_blank" rel="noopener noreferrer">
+                  ${iconLabel('external-link', 'Open on MobyGames')}
+                </a>`
+              : ''
+          }
           ${
             configured
               ? `<button type="button" class="btn-secondary text-xs" data-action="moby-refresh">${iconLabel('download', 'Refresh from MobyGames')}</button>`
@@ -107,7 +123,6 @@ function renderLinkedState(info: MobyGamesGameInfo, configured: boolean): string
         </div>
       </div>
     </div>
-    ${renderMobyGamesEditForm(info)}
   `;
 }
 
@@ -144,15 +159,12 @@ function readMobyGamesEditForm(host: HTMLElement): {
   description: string | null;
   mobyUrl: string;
   coverUrl: string | null;
-  coverThumbnailUrl: string | null;
   platforms: MobyGamesPlatformInfo[];
 } {
   const title = (host.querySelector('#moby-edit-title') as HTMLInputElement | null)?.value.trim() ?? '';
   const descriptionRaw = (host.querySelector('#moby-edit-description') as HTMLTextAreaElement | null)?.value ?? '';
   const mobyUrl = (host.querySelector('#moby-edit-moby-url') as HTMLInputElement | null)?.value.trim() ?? '';
   const coverUrlRaw = (host.querySelector('#moby-edit-cover-url') as HTMLInputElement | null)?.value.trim() ?? '';
-  const coverThumbRaw =
-    (host.querySelector('#moby-edit-cover-thumb-url') as HTMLInputElement | null)?.value.trim() ?? '';
 
   const platforms = [...host.querySelectorAll('[data-moby-platform-row]')]
     .map((row) => {
@@ -171,16 +183,16 @@ function readMobyGamesEditForm(host: HTMLElement): {
     description: descriptionRaw.trim() ? descriptionRaw : null,
     mobyUrl,
     coverUrl: coverUrlRaw || null,
-    coverThumbnailUrl: coverThumbRaw || null,
     platforms,
   };
 }
 
-export function mountMobyGamesAdmin(host: HTMLElement, slug: string): () => void {
+export function mountMobyGamesAdmin(host: HTMLElement, slug: string, gameName: string): () => void {
   let configured = false;
   let linkedInfo: MobyGamesGameInfo | null = null;
   let linkedGameId: number | null = null;
   let searchTimer: number | null = null;
+  let defaultGameName = gameName;
 
   const statusEl = () => host.querySelector('#moby-admin-status') as HTMLElement;
   const linkedEl = () => host.querySelector('#moby-admin-linked') as HTMLElement;
@@ -212,43 +224,27 @@ export function mountMobyGamesAdmin(host: HTMLElement, slug: string): () => void
   };
 
   const render = () => {
-    if (!configured && !linkedInfo && !linkedGameId) {
+    const editInfo = linkedInfo ?? createEmptyGameInfo(defaultGameName);
+
+    if (linkedGameId && linkedInfo) {
+      statusEl().textContent = configured
+        ? 'Linked to MobyGames. Edits below override what appears in the viewer and library.'
+        : 'Linked to MobyGames. Edits below are saved on the server. Refresh requires MOBYGAMES_API_KEY.';
+    } else if (linkedInfo) {
+      statusEl().textContent = 'Custom game info saved. Link MobyGames below to import metadata.';
+    } else if (configured) {
+      statusEl().textContent = 'Add game info below or link a MobyGames entry.';
+    } else {
       statusEl().textContent =
-        'MobyGames API key is not configured on the server. Set MOBYGAMES_API_KEY and restart.';
-      linkedEl().innerHTML = '';
-      searchWrap().hidden = true;
-      return;
+        'Add game info below. Linking MobyGames requires MOBYGAMES_API_KEY on the server.';
     }
 
-    statusEl().textContent = linkedInfo || linkedGameId
-      ? configured
-        ? 'This journal is linked to a MobyGames entry. Edits below are saved to the local cache.'
-        : 'This journal is linked to a MobyGames entry. Edits below are saved to the local cache. Search and refresh require MOBYGAMES_API_KEY.'
-      : configured
-        ? 'No MobyGames entry linked yet.'
-        : 'MobyGames API key is not configured on the server. Set MOBYGAMES_API_KEY and restart.';
-
-    linkedEl().innerHTML = linkedInfo
-      ? renderLinkedState(linkedInfo, configured)
-      : linkedGameId
-        ? `
-          <div class="mobygames-linked">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <p class="text-sm text-muted">Linked to MobyGames ID ${linkedGameId}</p>
-              <div class="flex flex-wrap gap-2">
-                ${
-                  configured
-                    ? `<button type="button" class="btn-secondary text-xs" data-action="moby-refresh">${iconLabel('download', 'Refresh from MobyGames')}</button>`
-                    : ''
-                }
-                <button type="button" class="btn-secondary text-xs" data-action="moby-unlink">${iconLabel('close', 'Unlink')}</button>
-              </div>
-            </div>
-          </div>
-        `
-        : '';
-    searchWrap().hidden = !configured || Boolean(linkedInfo || linkedGameId);
-    if (searchWrap().hidden === false) {
+    linkedEl().innerHTML = `
+      ${linkedGameId && linkedInfo ? renderLinkedHeader(linkedInfo, configured) : ''}
+      ${renderMobyGamesEditForm(editInfo)}
+    `;
+    searchWrap().hidden = !configured || Boolean(linkedGameId);
+    if (!searchWrap().hidden) {
       resultsEl().innerHTML = '<p class="text-faint text-sm">Search for a game to attach.</p>';
     }
   };
@@ -266,6 +262,9 @@ export function mountMobyGamesAdmin(host: HTMLElement, slug: string): () => void
       configured = status.configured;
       linkedInfo = mobyData.info;
       linkedGameId = mobyData.link?.gameId ?? null;
+      if (linkedInfo?.title.trim()) {
+        defaultGameName = linkedInfo.title;
+      }
       render();
     } catch (error) {
       statusEl().textContent =
@@ -320,21 +319,20 @@ export function mountMobyGamesAdmin(host: HTMLElement, slug: string): () => void
   };
 
   const saveCachedInfo = async () => {
-    if (!linkedInfo) return;
-
     const updates = readMobyGamesEditForm(host);
     if (!updates.title) {
       setStatus('Title is required.');
       return;
     }
 
-    setStatus('Saving MobyGames cache...');
+    setStatus('Saving game info...');
     try {
       linkedInfo = await updateMobyGamesCache(slug, updates);
+      defaultGameName = linkedInfo.title;
       render();
-      setStatus('MobyGames cache saved.');
+      setStatus('Game info saved.');
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Failed to save MobyGames cache');
+      setStatus(error instanceof Error ? error.message : 'Failed to save game info');
     }
   };
 
@@ -394,10 +392,11 @@ export function mountMobyGamesAdmin(host: HTMLElement, slug: string): () => void
       setStatus('Unlinking...');
       try {
         await unlinkMobyGamesEntry(slug);
-        linkedInfo = null;
+        const mobyData = await fetchMobyGamesForGame(slug);
+        linkedInfo = mobyData.info;
         linkedGameId = null;
         render();
-        setStatus('MobyGames entry unlinked.');
+        setStatus('MobyGames link removed. Custom game info was kept.');
       } catch (error) {
         setStatus(error instanceof Error ? error.message : 'Failed to unlink MobyGames entry');
       }

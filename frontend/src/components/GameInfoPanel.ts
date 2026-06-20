@@ -67,7 +67,7 @@ function renderVersions(platforms: MobyGamesGameInfo['platforms']): string {
 }
 
 export function renderGameInfoHtml(info: MobyGamesGameInfo): string {
-  const coverUrl = info.coverThumbnailUrl || info.coverUrl;
+  const coverUrl = info.coverUrl;
   const descriptionHtml = info.description ? formatDescriptionHtml(info.description) : '';
   const layoutClass = coverUrl ? 'game-info-layout has-cover' : 'game-info-layout';
 
@@ -95,9 +95,13 @@ export function renderGameInfoHtml(info: MobyGamesGameInfo): string {
       ${renderVersions(info.platforms)}
     </div>
     <div class="game-info-links">
-      <a href="${escapeHtml(info.mobyUrl)}" class="game-info-link" target="_blank" rel="noopener noreferrer">
-        View on MobyGames
-      </a>
+      ${
+        info.mobyUrl.trim()
+          ? `<a href="${escapeHtml(info.mobyUrl)}" class="game-info-link" target="_blank" rel="noopener noreferrer">
+              View on MobyGames
+            </a>`
+          : ''
+      }
     </div>
   `;
 
@@ -109,7 +113,7 @@ export function renderGameInfoHtml(info: MobyGamesGameInfo): string {
 }
 
 export function renderLibraryMobyHtml(info: MobyGamesGameInfo): string {
-  const coverUrl = info.coverThumbnailUrl || info.coverUrl;
+  const coverUrl = info.coverUrl;
   const description = info.description
     ? truncatePlainText(descriptionToPlainText(info.description), 150)
     : '';

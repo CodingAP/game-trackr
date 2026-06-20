@@ -32,7 +32,7 @@ const EDITOR_TAB_HELP: Record<EditorTabId, string> = {
     <p><strong>Viewer summary</strong> — Enable &quot;Show in summary&quot; to display a bar above the journal in the viewer.</p>
   `,
   admin: `
-    <p><strong>MobyGames</strong> — Link this journal to a MobyGames entry for box art, release info, and description in the viewer. Edit the cached fields below to customize what appears without changing the MobyGames link.</p>
+    <p><strong>MobyGames</strong> — Edit cover art, description, and platform info for the viewer and library. Link a MobyGames entry to import data, or fill in the fields manually.</p>
     <p><strong>Maintenance</strong> — Clear abandoned badges removes embed markers that reference deleted checkboxes, progress bars, or maps. Remove extra whitespace trims trailing spaces and collapses extra blank lines across journal pages.</p>
     <p><strong>Export</strong> — Download pages, checkboxes, progress bars, maps, and uploaded media as a <code>.gametrackr.json</code> file.</p>
     <p><strong>Delete</strong> — Permanently remove this game, including its pages, media, and progress bars.</p>

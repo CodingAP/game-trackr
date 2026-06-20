@@ -1489,7 +1489,7 @@
   }
 
   .game-info-cover {
-    @apply w-full max-w-[10rem] rounded-lg border object-cover shadow-sm;
+    @apply w-full max-w-[10rem] rounded-lg border object-contain object-center shadow-sm;
     border-color: rgb(var(--border-subtle));
     background-color: rgb(var(--surface-muted));
   }
@@ -1743,7 +1743,7 @@
   }
 
   .library-game-cover {
-    @apply h-28 w-[4.5rem] shrink-0 rounded-lg border object-cover shadow-sm;
+    @apply h-28 w-[4.5rem] shrink-0 rounded-lg border object-contain object-center shadow-sm;
     border-color: rgb(var(--border-subtle));
     background-color: rgb(var(--surface-muted));
   }
