@@ -63,7 +63,7 @@ function renderMobyGamesEditForm(info: MobyGamesGameInfo): string {
       : renderPlatformRow({ name: '', releaseDate: null });
 
   return `
-    <form id="moby-edit-form" class="mobygames-edit-form space-y-3">
+    <div id="moby-edit-form" class="mobygames-edit-form space-y-3">
       <p class="hint">Saved on the server and shown in the viewer and library.</p>
       <label class="block">
         <span class="label">Title</span>
@@ -92,9 +92,9 @@ function renderMobyGamesEditForm(info: MobyGamesGameInfo): string {
         </div>
       </div>
       <div class="flex flex-wrap gap-2">
-        <button type="submit" class="btn-primary">${iconLabel('save', 'Save game info')}</button>
+        <button type="button" class="btn-primary" data-action="moby-save">${iconLabel('save', 'Save game info')}</button>
       </div>
-    </form>
+    </div>
   `;
 }
 
@@ -340,6 +340,12 @@ export function mountMobyGamesAdmin(host: HTMLElement, slug: string, gameName: s
     const target = (event.target as Element).closest('[data-action]') as HTMLElement | null;
     if (!target) return;
 
+    if (target.dataset.action === 'moby-save') {
+      event.preventDefault();
+      void saveCachedInfo();
+      return;
+    }
+
     if (target.dataset.action === 'moby-link') {
       event.preventDefault();
       await attachGame(Number(target.dataset.gameId));
@@ -403,13 +409,6 @@ export function mountMobyGamesAdmin(host: HTMLElement, slug: string, gameName: s
     }
   };
 
-  const onHostSubmit = (event: Event) => {
-    const form = (event.target as Element | null)?.closest('#moby-edit-form');
-    if (!form) return;
-    event.preventDefault();
-    void saveCachedInfo();
-  };
-
   const onHostInput = (event: Event) => {
     const input = event.target as HTMLInputElement;
     if (input.id !== 'moby-search') return;
@@ -422,7 +421,6 @@ export function mountMobyGamesAdmin(host: HTMLElement, slug: string, gameName: s
 
   renderShell();
   host.addEventListener('click', onHostClick);
-  host.addEventListener('submit', onHostSubmit);
   host.addEventListener('input', onHostInput);
   const cleanupCollapsible = wireCollapsiblePanels(host);
   void load();
@@ -431,7 +429,6 @@ export function mountMobyGamesAdmin(host: HTMLElement, slug: string, gameName: s
     cleanupCollapsible();
     if (searchTimer !== null) window.clearTimeout(searchTimer);
     host.removeEventListener('click', onHostClick);
-    host.removeEventListener('submit', onHostSubmit);
     host.removeEventListener('input', onHostInput);
   };
 }
