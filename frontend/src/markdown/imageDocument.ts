@@ -6,6 +6,7 @@ import {
   type ImageSnippetOptions,
   type ImageSourceLink,
   type ParsedViewport,
+  type ViewportUnit,
 } from './images.js';
 
 export interface DocumentImage {
@@ -101,6 +102,8 @@ function imageViewportsEqual(
   return (
     left.width === right.width &&
     left.height === right.height &&
+    left.widthUnit === right.widthUnit &&
+    left.heightUnit === right.heightUnit &&
     left.scaleToFit === right.scaleToFit &&
     Boolean(left.maintainAspectRatio) === Boolean(right.maintainAspectRatio)
   );
@@ -217,16 +220,23 @@ export function removeAllDocumentImagesByUrl(
   return next;
 }
 
+function readViewportUnit(form: HTMLElement, selector: string): ViewportUnit {
+  const value = (form.querySelector(selector) as HTMLSelectElement | null)?.value;
+  return value === '%' ? '%' : 'px';
+}
+
 export function readImageViewportOptions(form: HTMLElement): ParsedViewport | undefined {
   const width = Number((form.querySelector('[data-field="width"]') as HTMLInputElement).value);
   const height = Number((form.querySelector('[data-field="height"]') as HTMLInputElement).value);
+  const widthUnit = readViewportUnit(form, '[data-field="width-unit"]');
+  const heightUnit = readViewportUnit(form, '[data-field="height-unit"]');
   const scaleToFit = (form.querySelector('[data-field="scale"]') as HTMLInputElement).checked;
   const maintainAspectRatio =
     (form.querySelector('[data-field="maintain-aspect"]') as HTMLInputElement | null)?.checked ??
     false;
   const hasViewport = Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
   return hasViewport
-    ? { width, height, scaleToFit, maintainAspectRatio }
+    ? { width, height, widthUnit, heightUnit, scaleToFit, maintainAspectRatio }
     : undefined;
 }
 

@@ -12,7 +12,8 @@ export const LOCAL_DATA_KEYS = [
   'game-tracking:theme',
   'game-tracking:hide-images',
   'game-tracking:image-viewport',
-  'game-tracking:library-folders',
+  'game-tracking:collections',
+  'game-tracking:library-sort',
 ] as const;
 
 export const BACKUP_VERSION = 1;

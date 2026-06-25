@@ -27,6 +27,8 @@ export interface ManagedCheckbox {
   label: string;
   parentId: string | null;
   tagIds: string[];
+  /** When true, a top-level checkbox is excluded from the overall completion total. Defaults to counting. */
+  excludeFromCompletion?: boolean;
 }
 
 export interface CheckboxConnectionsData {
@@ -36,6 +38,8 @@ export interface CheckboxConnectionsData {
 export interface MapViewport {
   width: number;
   height: number;
+  widthUnit?: 'px' | '%';
+  heightUnit?: 'px' | '%';
 }
 
 export interface MapScrollPosition {

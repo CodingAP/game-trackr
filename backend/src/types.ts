@@ -50,6 +50,8 @@ export interface ManagedCheckbox {
   label: string;
   parentId: string | null;
   tagIds: string[];
+  /** When true, a top-level checkbox is excluded from the overall completion total. Defaults to counting. */
+  excludeFromCompletion?: boolean;
 }
 
 export interface CheckboxConnectionsData {

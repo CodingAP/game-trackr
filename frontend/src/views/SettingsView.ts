@@ -5,6 +5,7 @@ import {
   exportLocalData,
   importLocalData,
 } from '../storage/backup.js';
+import { exportCollectionsFile, getCollections, importCollectionsFile } from '../storage/collections.js';
 import {
   getHideImages,
   getThemeSettings,
@@ -148,6 +149,27 @@ export function renderSettings(container: HTMLElement): () => void {
         <span id="backup-status" class="text-muted text-sm"></span>
       </div>
     </form>
+
+    <div class="backup-collections">
+      <h3 class="text-sm font-medium">Collections only</h3>
+      <p class="text-muted text-sm mt-1">
+        Export or import just your collection structure (names, descriptions, thumbnails, and membership).
+        Imports merge into your existing collections.
+      </p>
+      <div class="backup-actions mt-3">
+        <button type="button" id="export-collections" class="btn-secondary">${iconLabel('download', 'Download collections')}</button>
+      </div>
+      <form id="import-collections-form" class="backup-import mt-4 space-y-3">
+        <label class="block">
+          <span class="label">Import collections file</span>
+          <input type="file" id="import-collections-file" class="input file-input" accept="application/json,.json" />
+        </label>
+        <div class="flex flex-wrap items-center gap-3">
+          <button type="submit" class="btn-secondary">${iconLabel('import', 'Import collections')}</button>
+          <span id="collections-status" class="text-muted text-sm"></span>
+        </div>
+      </form>
+    </div>
   `;
 
   container.innerHTML = `
@@ -170,6 +192,16 @@ export function renderSettings(container: HTMLElement): () => void {
   const importFileInput = container.querySelector('#import-data-file') as HTMLInputElement;
   const backupStatus = container.querySelector('#backup-status') as HTMLElement;
   const exportButton = container.querySelector('#export-data') as HTMLButtonElement;
+  const exportCollectionsButton = container.querySelector(
+    '#export-collections',
+  ) as HTMLButtonElement;
+  const importCollectionsForm = container.querySelector(
+    '#import-collections-form',
+  ) as HTMLFormElement;
+  const importCollectionsFileInput = container.querySelector(
+    '#import-collections-file',
+  ) as HTMLInputElement;
+  const collectionsStatus = container.querySelector('#collections-status') as HTMLElement;
 
   const onHideImagesChange = () => {
     const hide = hideImagesInput.checked;
@@ -266,6 +298,42 @@ export function renderSettings(container: HTMLElement): () => void {
     }
   };
 
+  const onExportCollections = () => {
+    const count = getCollections().collections.length;
+    if (count === 0) {
+      collectionsStatus.textContent = 'No collections to export yet.';
+      return;
+    }
+    exportCollectionsFile();
+    collectionsStatus.textContent = 'Collections downloaded.';
+    window.setTimeout(() => {
+      collectionsStatus.textContent = '';
+    }, 3000);
+  };
+
+  const onImportCollections = async (event: Event) => {
+    event.preventDefault();
+    collectionsStatus.textContent = '';
+
+    const file = importCollectionsFileInput.files?.[0];
+    if (!file) {
+      collectionsStatus.textContent = 'Choose a collections file first.';
+      return;
+    }
+
+    try {
+      const json = await file.text();
+      const state = importCollectionsFile(json, { merge: true });
+      collectionsStatus.textContent = `Imported. You now have ${state.collections.length} collection${
+        state.collections.length === 1 ? '' : 's'
+      }.`;
+      importCollectionsForm.reset();
+    } catch (error) {
+      collectionsStatus.textContent =
+        error instanceof Error ? error.message : 'Failed to import collections.';
+    }
+  };
+
   container.querySelectorAll('[data-theme-preset]').forEach((button) => {
     button.addEventListener('click', onThemePresetSelect);
   });
@@ -275,6 +343,8 @@ export function renderSettings(container: HTMLElement): () => void {
   hideImagesInput.addEventListener('change', onHideImagesChange);
   exportButton.addEventListener('click', onExportData);
   importForm.addEventListener('submit', onImportData);
+  exportCollectionsButton.addEventListener('click', onExportCollections);
+  importCollectionsForm.addEventListener('submit', onImportCollections);
 
   const cleanupCollapsible = wireCollapsiblePanels(container);
 
@@ -286,5 +356,7 @@ export function renderSettings(container: HTMLElement): () => void {
     exportButton.removeEventListener('click', onExportData);
     hideImagesInput.removeEventListener('change', onHideImagesChange);
     importForm.removeEventListener('submit', onImportData);
+    exportCollectionsButton.removeEventListener('click', onExportCollections);
+    importCollectionsForm.removeEventListener('submit', onImportCollections);
   };
 }

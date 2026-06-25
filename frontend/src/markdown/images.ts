@@ -2,13 +2,17 @@ import type { ImageViewportSettings } from '../types/index.js';
 import { formatViewportTitle } from '../storage/settings.js';
 import { isVideoUrl } from './media.js';
 
-const VIEWPORT_TITLE = /^(\d+)\s*[x×]\s*(\d+)(?:\s|$)/i;
+const VIEWPORT_TITLE = /^(\d+)(%?)\s*[x×]\s*(\d+)(%?)(?:\s|$)/i;
 const CENTER_ONLY_TITLE = /^center$/i;
 const MARKDOWN_LINK = /^\[([^\]]+)\]\(([^)]+)\)$/;
+
+export type ViewportUnit = 'px' | '%';
 
 export interface ParsedViewport {
   width: number;
   height: number;
+  widthUnit: ViewportUnit;
+  heightUnit: ViewportUnit;
   scaleToFit: boolean;
   maintainAspectRatio?: boolean;
 }
@@ -32,7 +36,9 @@ export function parseViewportTitle(title: string | null | undefined): ParsedView
   const rest = trimmed.slice(match[0].length).toLowerCase();
   return {
     width: Number(match[1]),
-    height: Number(match[2]),
+    widthUnit: match[2] === '%' ? '%' : 'px',
+    height: Number(match[3]),
+    heightUnit: match[4] === '%' ? '%' : 'px',
     scaleToFit: /\b(?:fit|scale)\b/.test(rest),
     maintainAspectRatio: /\baspect\b/.test(rest),
   };
@@ -48,6 +54,8 @@ export function formatImageEmbedTitle(options: {
       options.viewport.height,
       options.viewport.scaleToFit,
       options.viewport.maintainAspectRatio ?? false,
+      options.viewport.widthUnit,
+      options.viewport.heightUnit,
     );
     return options.centered ? `${base} center` : base;
   }
@@ -208,7 +216,15 @@ export function applyImageViewports(
     resetViewport(viewport, img);
 
     if (override) {
-      applyCustomViewport(viewport, img, override.width, override.height, override.scaleToFit);
+      applyCustomViewport(
+        viewport,
+        img,
+        override.width,
+        override.height,
+        override.scaleToFit,
+        override.widthUnit,
+        override.heightUnit,
+      );
       viewport.dataset.customViewport = 'true';
     } else if (globalSettings.enabled) {
       applyCustomViewport(
@@ -217,6 +233,8 @@ export function applyImageViewports(
         globalSettings.width,
         globalSettings.height,
         globalSettings.scaleToFit,
+        'px',
+        'px',
       );
     } else {
       applyNaturalViewport(viewport, img);
@@ -270,11 +288,13 @@ export function applyMediaViewports(
 
     const width = override?.width ?? (globalSettings.enabled ? globalSettings.width : undefined);
     const height = override?.height ?? (globalSettings.enabled ? globalSettings.height : undefined);
+    const widthUnit = override?.widthUnit ?? 'px';
+    const heightUnit = override?.heightUnit ?? 'px';
 
     if (width && height) {
       viewport.classList.add('media-viewport-custom');
-      viewport.style.maxWidth = `${width}px`;
-      viewport.style.maxHeight = `${height}px`;
+      viewport.style.maxWidth = `${width}${widthUnit}`;
+      viewport.style.maxHeight = `${height}${heightUnit}`;
       element.style.maxWidth = '100%';
       element.style.height = 'auto';
       if (override) viewport.dataset.customViewport = 'true';
@@ -356,15 +376,17 @@ function applyCustomViewport(
   width: number,
   height: number,
   scaleToFit: boolean,
+  widthUnit: ViewportUnit = 'px',
+  heightUnit: ViewportUnit = 'px',
 ): void {
   viewport.classList.add('image-viewport-custom');
-  viewport.style.maxWidth = `${width}px`;
-  viewport.style.maxHeight = `${height}px`;
+  viewport.style.maxWidth = `${width}${widthUnit}`;
+  viewport.style.maxHeight = `${height}${heightUnit}`;
 
   if (scaleToFit) {
     viewport.classList.add('image-viewport-scale');
-    viewport.style.width = `${width}px`;
-    viewport.style.height = `${height}px`;
+    viewport.style.width = `${width}${widthUnit}`;
+    viewport.style.height = `${height}${heightUnit}`;
     img.classList.add('image-scaled');
   } else {
     img.classList.add('image-natural');

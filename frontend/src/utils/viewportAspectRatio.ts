@@ -32,6 +32,8 @@ export function wireViewportAspectRatio(
     widthField: string;
     heightField: string;
     lockField: string;
+    widthUnitField?: string;
+    heightUnitField?: string;
     resolveAspectRatio?: () => number | null;
   },
 ): { cleanup: () => void; refreshAspectRatio: () => void } {
@@ -41,6 +43,15 @@ export function wireViewportAspectRatio(
   if (!widthInput || !heightInput || !lockInput) {
     return { cleanup: () => {}, refreshAspectRatio: () => {} };
   }
+
+  // Pixel aspect-ratio autofill only makes sense when both dimensions are in px.
+  // A percentage width is relative to the container width while a percentage
+  // height is relative to a different base, so the ratio cannot be preserved.
+  const unitsAllowSync = (): boolean => {
+    const readUnit = (selector?: string): string =>
+      selector ? (container.querySelector(selector) as HTMLSelectElement | null)?.value ?? 'px' : 'px';
+    return readUnit(options.widthUnitField) !== '%' && readUnit(options.heightUnitField) !== '%';
+  };
 
   let aspectRatio: number | null = null;
 
@@ -58,6 +69,7 @@ export function wireViewportAspectRatio(
 
   const syncHeightFromWidth = () => {
     if (!lockInput.checked) return;
+    if (!unitsAllowSync()) return;
     if (!aspectRatio) {
       captureAspectRatio();
     }
@@ -70,6 +82,7 @@ export function wireViewportAspectRatio(
 
   const syncWidthFromHeight = () => {
     if (!lockInput.checked) return;
+    if (!unitsAllowSync()) return;
     if (!aspectRatio) {
       captureAspectRatio();
     }
@@ -82,6 +95,10 @@ export function wireViewportAspectRatio(
 
   const onLockChange = () => {
     if (lockInput.checked) {
+      if (!unitsAllowSync()) {
+        aspectRatio = null;
+        return;
+      }
       captureAspectRatio();
       const width = Number(widthInput.value);
       const height = Number(heightInput.value);

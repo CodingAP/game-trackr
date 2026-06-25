@@ -8,7 +8,7 @@ export const LOCAL_STORAGE_KEYS = [
   'game-tracking:theme',
   'game-tracking:hide-images',
   'game-tracking:image-viewport',
-  'game-tracking:library-folders',
+  'game-tracking:collections',
   'game-tracking:library-sort',
 ] as const;
 
@@ -166,7 +166,7 @@ export function describeBackupContents(keys: string[]): string {
     'game-tracking:theme': 'theme',
     'game-tracking:hide-images': 'hide images preference',
     'game-tracking:image-viewport': 'media viewport settings',
-    'game-tracking:library-folders': 'library folders',
+    'game-tracking:collections': 'collections',
     'game-tracking:library-sort': 'library sort preferences',
   };
 

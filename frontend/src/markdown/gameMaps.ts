@@ -12,9 +12,23 @@ import { setCheckboxStates } from '../storage/progress.js';
 export const MAP_MARKER = /\[\[map:([^\]|]+)(?:\|([^\]]+))?\]\]/g;
 
 export const DEFAULT_MAP_EMBED_LAYOUT = {
-  viewport: { width: 800, height: 600 },
+  viewport: { width: 800, height: 600, widthUnit: 'px', heightUnit: 'px' },
   start: { x: 0, y: 0 },
 } as const;
+
+type ViewportUnit = 'px' | '%';
+
+function unitSuffix(unit: ViewportUnit | undefined): string {
+  return unit === '%' ? '%' : '';
+}
+
+function frameWidthCss(width: number, unit: ViewportUnit | undefined): string {
+  return unit === '%' ? `${width}%` : `min(100%, ${width}px)`;
+}
+
+function frameHeightCss(height: number, unit: ViewportUnit | undefined): string {
+  return unit === '%' ? `${height}%` : `${height}px`;
+}
 
 export interface ParsedMapEmbed {
   mapRef: string;
@@ -60,7 +74,12 @@ export function parseMapMarkerPayload(mapRef: string, optionsPart?: string): Par
     : options;
   const viewport = parseViewportTitle(viewportPart);
   if (viewport) {
-    parsed.viewport = { width: viewport.width, height: viewport.height };
+    parsed.viewport = {
+      width: viewport.width,
+      height: viewport.height,
+      widthUnit: viewport.widthUnit,
+      heightUnit: viewport.heightUnit,
+    };
   }
   if (startMatch) {
     parsed.start = {
@@ -116,13 +135,19 @@ export function buildMapMarker(
     undefined,
   );
   const { viewport, start } = resolved;
+  const widthUnit = viewport.widthUnit ?? 'px';
+  const heightUnit = viewport.heightUnit ?? 'px';
   const isDefault =
     viewport.width === DEFAULT_MAP_EMBED_LAYOUT.viewport.width &&
     viewport.height === DEFAULT_MAP_EMBED_LAYOUT.viewport.height &&
+    widthUnit === 'px' &&
+    heightUnit === 'px' &&
     start.x === DEFAULT_MAP_EMBED_LAYOUT.start.x &&
     start.y === DEFAULT_MAP_EMBED_LAYOUT.start.y;
   if (isDefault) return `[[map:${map.id}]]`;
-  return `[[map:${map.id}|${viewport.width}x${viewport.height}@${start.x},${start.y}]]`;
+  const w = `${viewport.width}${unitSuffix(widthUnit)}`;
+  const h = `${viewport.height}${unitSuffix(heightUnit)}`;
+  return `[[map:${map.id}|${w}x${h}@${start.x},${start.y}]]`;
 }
 
 export function replaceMapMarkerReference(
@@ -142,7 +167,7 @@ export function preprocessMapMarkdown(content: string): string {
     const parsed = parseMapMarkerPayload(mapRef, options);
     const encoded = encodeURIComponent(parsed.mapRef);
     const layout = resolveMapEmbedLayout(parsed);
-    return `<div class="game-map-mount" data-map-ref="${encoded}" data-viewport-width="${layout.viewport.width}" data-viewport-height="${layout.viewport.height}" data-start-x="${layout.start.x}" data-start-y="${layout.start.y}"></div>`;
+    return `<div class="game-map-mount" data-map-ref="${encoded}" data-viewport-width="${layout.viewport.width}" data-viewport-height="${layout.viewport.height}" data-viewport-width-unit="${layout.viewport.widthUnit ?? 'px'}" data-viewport-height-unit="${layout.viewport.heightUnit ?? 'px'}" data-start-x="${layout.start.x}" data-start-y="${layout.start.y}"></div>`;
   });
 }
 
@@ -271,6 +296,8 @@ export function renderGameMapHtml(
       data-map-id="${escapeHtml(map.id)}"
       data-viewport-width="${layout.viewport.width}"
       data-viewport-height="${layout.viewport.height}"
+      data-viewport-width-unit="${layout.viewport.widthUnit ?? 'px'}"
+      data-viewport-height-unit="${layout.viewport.heightUnit ?? 'px'}"
       data-start-x="${layout.start.x}"
       data-start-y="${layout.start.y}"
     >
@@ -280,7 +307,7 @@ export function renderGameMapHtml(
       <div class="game-map-body">
         <div
           class="game-map-frame"
-          style="width: min(100%, ${layout.viewport.width}px); height: ${layout.viewport.height}px;"
+          style="width: ${frameWidthCss(layout.viewport.width, layout.viewport.widthUnit)}; height: ${frameHeightCss(layout.viewport.height, layout.viewport.heightUnit)};"
         >
           <div class="game-map-viewport">
             <div class="game-map-stage">
@@ -314,6 +341,8 @@ export function mountGameMapBlocks(container: HTMLElement, mapsData: GameMapsDat
       viewport: {
         width: Number(element.getAttribute('data-viewport-width')) || DEFAULT_MAP_EMBED_LAYOUT.viewport.width,
         height: Number(element.getAttribute('data-viewport-height')) || DEFAULT_MAP_EMBED_LAYOUT.viewport.height,
+        widthUnit: element.getAttribute('data-viewport-width-unit') === '%' ? ('%' as const) : ('px' as const),
+        heightUnit: element.getAttribute('data-viewport-height-unit') === '%' ? ('%' as const) : ('px' as const),
       },
       start: {
         x: Number(element.getAttribute('data-start-x')) || DEFAULT_MAP_EMBED_LAYOUT.start.x,

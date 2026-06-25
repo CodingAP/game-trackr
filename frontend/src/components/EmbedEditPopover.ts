@@ -17,6 +17,7 @@ import {
   buildImageSnippet,
   formatImageEmbedTitle,
   openImageInNewTab,
+  type ViewportUnit,
 } from '../markdown/images.js';
 import { isVideoUrl } from '../markdown/media.js';
 import { getImageViewportSettings } from '../storage/settings.js';
@@ -111,10 +112,18 @@ function readMapEmbedLayoutOptions(form: HTMLElement): {
     return Number.isFinite(value) ? Math.max(min, Math.round(value)) : fallback;
   };
 
+  const readUnit = (selector: string): ViewportUnit =>
+    (form.querySelector(selector) as HTMLSelectElement | null)?.value === '%' ? '%' : 'px';
+
+  const widthUnit = readUnit('[data-field="map-width-unit"]');
+  const heightUnit = readUnit('[data-field="map-height-unit"]');
+
   return {
     viewport: {
-      width: readDimension('[data-field="map-width"]', 800, 100),
-      height: readDimension('[data-field="map-height"]', 600, 100),
+      width: readDimension('[data-field="map-width"]', 800, widthUnit === '%' ? 1 : 100),
+      height: readDimension('[data-field="map-height"]', 600, heightUnit === '%' ? 1 : 100),
+      widthUnit,
+      heightUnit,
     },
     start: {
       x: readDimension('[data-field="map-start-x"]', 0, 0),
@@ -140,15 +149,21 @@ function renderMapEditForm(
       <input type="hidden" data-field="selected-map-id" value="${escapeHtml(selectedMapId ?? '')}" />
       <p class="label">Map</p>
       ${renderPickerList(items, 'No maps defined yet. Add them in the Maps tab.', selectedMapId ?? undefined)}
-      <p class="hint">Viewport size and starting scroll position are specific to this embed.</p>
+      <p class="hint">Viewport size and starting scroll position are specific to this embed. Use % to scale with the screen (better on mobile).</p>
       <div class="grid gap-3 sm:grid-cols-2">
         <label class="block">
-          <span class="label">Viewport width (px)</span>
-          <input type="number" data-field="map-width" class="input" min="100" step="1" value="${layout.viewport.width}" />
+          <span class="label">Viewport width</span>
+          <div class="viewport-size-field">
+            <input type="number" data-field="map-width" class="input" min="1" step="1" value="${layout.viewport.width}" />
+            ${renderUnitSelect('map-width-unit', layout.viewport.widthUnit ?? 'px')}
+          </div>
         </label>
         <label class="block">
-          <span class="label">Viewport height (px)</span>
-          <input type="number" data-field="map-height" class="input" min="100" step="1" value="${layout.viewport.height}" />
+          <span class="label">Viewport height</span>
+          <div class="viewport-size-field">
+            <input type="number" data-field="map-height" class="input" min="1" step="1" value="${layout.viewport.height}" />
+            ${renderUnitSelect('map-height-unit', layout.viewport.heightUnit ?? 'px')}
+          </div>
         </label>
         <label class="block">
           <span class="label">Start X (px)</span>
@@ -211,6 +226,17 @@ function renderProgressEditForm(reference: string): string {
   `;
 }
 
+function renderUnitSelect(field: string, selected: ViewportUnit): string {
+  const option = (value: ViewportUnit, label: string) =>
+    `<option value="${value}" ${value === selected ? 'selected' : ''}>${label}</option>`;
+  return `
+    <select data-field="${field}" class="input viewport-unit-select" aria-label="Unit">
+      ${option('px', 'px')}
+      ${option('%', '%')}
+    </select>
+  `;
+}
+
 function renderImageMetadataForm(
   parsed: NonNullable<ReturnType<typeof parseImageEmbedRaw>>,
   library?: ImageLibraryData,
@@ -252,15 +278,21 @@ function renderImageMetadataForm(
           ? `<p class="text-sm text-muted">Source: ${escapeHtml(displaySource.label)}</p>`
           : ''
       }
-      <p class="hint">Edit alt text and source in the Media tab. Viewport is specific to this embed.</p>
+      <p class="hint">Edit alt text and source in the Media tab. Viewport is specific to this embed. Use % to scale with the screen (better on mobile).</p>
       <div class="grid gap-3 sm:grid-cols-2">
         <label class="block">
-          <span class="label">Viewport width (px)</span>
-          <input type="number" data-field="width" class="input" min="1" step="1" value="${parsed.viewport?.width ?? ''}" placeholder="Optional" />
+          <span class="label">Viewport width</span>
+          <div class="viewport-size-field">
+            <input type="number" data-field="width" class="input" min="1" step="1" value="${parsed.viewport?.width ?? ''}" placeholder="Optional" />
+            ${renderUnitSelect('width-unit', parsed.viewport?.widthUnit ?? 'px')}
+          </div>
         </label>
         <label class="block">
-          <span class="label">Viewport height (px)</span>
-          <input type="number" data-field="height" class="input" min="1" step="1" value="${parsed.viewport?.height ?? ''}" placeholder="Optional" />
+          <span class="label">Viewport height</span>
+          <div class="viewport-size-field">
+            <input type="number" data-field="height" class="input" min="1" step="1" value="${parsed.viewport?.height ?? ''}" placeholder="Optional" />
+            ${renderUnitSelect('height-unit', parsed.viewport?.heightUnit ?? 'px')}
+          </div>
         </label>
       </div>
       <label class="settings-check">
@@ -516,6 +548,8 @@ export function openEmbedEditPopover(options: {
       widthField: '[data-field="width"]',
       heightField: '[data-field="height"]',
       lockField: '[data-field="maintain-aspect"]',
+      widthUnitField: '[data-field="width-unit"]',
+      heightUnitField: '[data-field="height-unit"]',
       resolveAspectRatio: () => {
         const media = preview?.querySelector('img, video') as HTMLImageElement | HTMLVideoElement | null;
         return readMediaNaturalAspectRatio(media);
@@ -563,7 +597,7 @@ export function openEmbedEditPopover(options: {
       openImageInNewTab(url);
     });
 
-    form?.querySelectorAll('[data-field="width"], [data-field="height"], [data-field="scale"], [data-field="center"], [data-field="maintain-aspect"]').forEach(
+    form?.querySelectorAll('[data-field="width"], [data-field="height"], [data-field="width-unit"], [data-field="height-unit"], [data-field="scale"], [data-field="center"], [data-field="maintain-aspect"]').forEach(
       (field) => {
         field.addEventListener('input', refreshImagePreview);
         field.addEventListener('change', refreshImagePreview);

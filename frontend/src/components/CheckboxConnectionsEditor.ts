@@ -147,6 +147,21 @@ function renderCheckboxDetailPanel(
               .join('')}
           </select>
       </label>
+      ${
+        checkbox.parentId === null
+          ? `
+            <label class="settings-check mb-3">
+              <input
+                type="checkbox"
+                data-checkbox-completion="${escapeHtml(checkbox.id)}"
+                ${checkbox.excludeFromCompletion ? '' : 'checked'}
+              />
+              <span>Count toward overall completion</span>
+            </label>
+            <p class="hint mb-3">Uncheck to keep this checkbox out of the overall completion total.</p>
+          `
+          : ''
+      }
       ${renderProgressBarSection(checkbox, progressBars)}
     </div>
   `;
@@ -426,6 +441,16 @@ export function mountCheckboxConnectionsEditor(
         const value = (select as HTMLSelectElement).value;
         checkbox.parentId = value || null;
         render();
+      });
+    });
+
+    editHost.querySelectorAll('[data-checkbox-completion]').forEach((input) => {
+      input.addEventListener('change', () => {
+        const checkboxId = (input as HTMLElement).dataset.checkboxCompletion;
+        const checkbox = checkboxes.find((cb) => cb.id === checkboxId);
+        if (!checkbox) return;
+        checkbox.excludeFromCompletion = !(input as HTMLInputElement).checked;
+        options.onCheckboxesChanged?.();
       });
     });
 

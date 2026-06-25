@@ -73,7 +73,7 @@ export function managedToCheckboxItems(checkboxes: ManagedCheckbox[]): CheckboxI
       depth,
       parentId: cb.parentId,
       childIds: childIdsByParent.get(cb.id) ?? [],
-      countsTowardProgress: cb.parentId === null,
+      countsTowardProgress: cb.parentId === null && !cb.excludeFromCompletion,
     };
   });
 }

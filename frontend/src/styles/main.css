@@ -371,16 +371,27 @@
     @apply w-full sm:w-auto;
   }
 
-  .library-add-folder {
-    @apply flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center;
-  }
-
-  .library-add-folder .input {
-    @apply min-w-0 sm:w-48;
-  }
-
-  .library-sort-host {
+  .library-view-toggle-host {
     @apply mt-3;
+  }
+
+  .library-view-toggle {
+    @apply inline-flex overflow-hidden rounded-lg border;
+    border-color: rgb(var(--border));
+  }
+
+  .library-view-toggle-btn {
+    @apply px-3 py-1.5 text-sm;
+    color: rgb(var(--text-muted));
+  }
+
+  .library-view-toggle-btn.is-active {
+    color: rgb(var(--text-heading));
+    background-color: rgb(var(--surface-muted));
+  }
+
+  .library-controls {
+    @apply mb-4 flex flex-wrap items-center gap-3;
   }
 
   .library-sort {
@@ -399,30 +410,105 @@
     @apply w-32;
   }
 
-  .library-folder-list {
+  .library-collection-list {
     @apply min-w-0;
   }
 
-  .library-folder-panel.collapsible-panel .collapsible-panel-title {
+  .library-collection-panel.collapsible-panel .collapsible-panel-title {
     @apply flex items-center gap-2;
   }
 
-  .library-folder-title {
+  .library-collection-title {
     @apply inline-flex min-w-0 items-center gap-2;
   }
 
-  .library-folder-icon {
-    @apply shrink-0 opacity-70;
+  .library-collection-thumb {
+    @apply h-12 w-12 shrink-0 rounded-lg border object-contain sm:h-16 sm:w-16;
+    border-color: rgb(var(--border-subtle));
+    background-color: rgb(var(--surface-muted));
   }
 
-  .library-folder-count {
+  .library-collection-thumb-placeholder {
+    @apply inline-flex items-center justify-center;
+    color: rgb(var(--text-muted));
+  }
+
+  .library-collection-thumb-placeholder .ui-icon {
+    @apply h-6 w-6 sm:h-7 sm:w-7;
+  }
+
+  .library-collection-count {
     @apply rounded-full px-2 py-0.5 text-xs font-medium;
     color: rgb(var(--text-muted));
     background-color: rgb(var(--surface-muted));
   }
 
+  .library-collection-desc {
+    @apply mb-3;
+  }
+
   .library-game-grid {
     @apply grid gap-4 sm:grid-cols-2 lg:grid-cols-3;
+  }
+
+  .library-card-stats {
+    @apply flex items-center gap-3;
+  }
+
+  .library-card-stat-text {
+    @apply min-w-0 space-y-1;
+  }
+
+  .library-card-playtime {
+    @apply inline-flex items-center gap-1.5 text-sm;
+    color: rgb(var(--text-muted));
+  }
+
+  .progress-ring {
+    @apply h-12 w-12 shrink-0;
+  }
+
+  .progress-ring-track {
+    stroke: rgb(var(--surface-muted));
+  }
+
+  .progress-ring-fill {
+    stroke: rgb(var(--accent));
+    transition: stroke-dashoffset 0.3s ease;
+  }
+
+  .progress-ring-text {
+    @apply text-[11px] font-semibold;
+    fill: rgb(var(--text-heading));
+  }
+
+  .collection-game-list {
+    @apply max-h-64 space-y-1 overflow-y-auto rounded-lg border p-2;
+    border-color: rgb(var(--border-subtle));
+  }
+
+  .collection-game-option {
+    @apply flex items-center gap-2 rounded px-2 py-1 text-sm;
+  }
+
+  .collection-thumb-preview img {
+    @apply h-20 w-20 rounded border object-contain;
+    border-color: rgb(var(--border-subtle));
+    background-color: rgb(var(--surface-muted));
+  }
+
+  .collection-new-row {
+    @apply flex items-center gap-2;
+  }
+
+  .collection-edit-dialog,
+  .collection-membership-dialog {
+    @apply max-h-[85vh] overflow-y-auto;
+  }
+
+  .backup-collections {
+    @apply mt-6 border-t pt-6;
+    border-color: rgb(var(--border-subtle));
   }
 
   .settings-section-title {
@@ -942,6 +1028,18 @@
 
   .embed-edit-image-preview.image-figure-centered {
     @apply mx-auto flex flex-col items-center;
+  }
+
+  .viewport-size-field {
+    @apply flex items-center gap-2;
+  }
+
+  .viewport-size-field input[type='number'] {
+    @apply min-w-0 flex-1;
+  }
+
+  .viewport-unit-select {
+    @apply w-16 shrink-0 py-1 text-sm;
   }
 
   .embed-edit-image-preview .image-viewport {

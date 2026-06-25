@@ -117,8 +117,12 @@ export function formatViewportTitle(
   height: number,
   scaleToFit = false,
   maintainAspectRatio = false,
+  widthUnit: 'px' | '%' = 'px',
+  heightUnit: 'px' | '%' = 'px',
 ): string {
-  let title = scaleToFit ? `${width}x${height} fit` : `${width}x${height}`;
+  const w = `${width}${widthUnit === '%' ? '%' : ''}`;
+  const h = `${height}${heightUnit === '%' ? '%' : ''}`;
+  let title = scaleToFit ? `${w}x${h} fit` : `${w}x${h}`;
   if (maintainAspectRatio) title += ' aspect';
   return title;
 }
