@@ -96,7 +96,10 @@ export function formatManagedCheckboxLabel(checkbox: ManagedCheckbox): string {
   return checkbox.label.trim() || checkbox.id || 'Untitled checkbox';
 }
 
-export function preprocessManagedCheckboxMarkdown(content: string): string {
+export function preprocessManagedCheckboxMarkdown(
+  content: string,
+  labelById?: Map<string, string>,
+): string {
   const lines = content.split('\n');
   const output: string[] = [];
   let block: Array<{ depth: number; id: string; label: string }> = [];
@@ -105,7 +108,9 @@ export function preprocessManagedCheckboxMarkdown(content: string): string {
     if (block.length === 0) return;
     output.push('<ul class="managed-checkbox-list">');
     for (const item of block) {
-      const label = item.label.trim() || item.id;
+      const inlineLabel = item.label.trim();
+      const managedLabel = labelById?.get(item.id)?.trim() ?? '';
+      const label = inlineLabel || managedLabel || item.id;
       output.push(
         `<li class="managed-checkbox is-unchecked" data-cb-id="${escapeAttr(item.id)}" data-cb-depth="${item.depth}">` +
           `<label><input type="checkbox" disabled data-cb-id="${escapeAttr(item.id)}" />` +

@@ -201,12 +201,16 @@ export async function renderViewer(
       journalPanel?.scrollIntoView({ block: 'start' });
     };
 
+    const managedLabelById = new Map(managed.map((checkbox) => [checkbox.id, checkbox.label]));
+
     const renderPage = (pageId: string, options: { scrollIntoView?: boolean } = {}) => {
       activePageId = pageId;
       const content = journal.contents[pageId] ?? '';
       body.innerHTML = renderMarkdown(
         preprocessMapMarkdown(
-          preprocessTagProgressMarkdown(preprocessManagedCheckboxMarkdown(content)),
+          preprocessTagProgressMarkdown(
+            preprocessManagedCheckboxMarkdown(content, managedLabelById),
+          ),
         ),
       );
       cleanupGameMaps?.();

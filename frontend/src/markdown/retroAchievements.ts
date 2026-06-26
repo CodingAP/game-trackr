@@ -37,6 +37,14 @@ export function achievementBadgeUrl(badgeName: string, locked = false): string {
   return `${BADGE_BASE}/${badgeName}${locked ? '_lock' : ''}.png`;
 }
 
+/** Single checkbox label: title and description together for journal embeds. */
+export function formatAchievementLabel(achievement: RetroAchievement): string {
+  const title = achievement.title.trim() || `Achievement ${achievement.id}`;
+  const description = achievement.description.trim();
+  if (!description || description === title) return title;
+  return `${title} — ${description}`;
+}
+
 /**
  * Achievements are modeled as top-level managed checkboxes tagged with the
  * shared "Achievements" progress bar. They are excluded from overall completion
@@ -46,7 +54,7 @@ export function achievementBadgeUrl(badgeName: string, locked = false): string {
 export function buildAchievementCheckbox(achievement: RetroAchievement): ManagedCheckbox {
   return {
     id: achievementCheckboxId(achievement.id),
-    label: achievement.title || `Achievement ${achievement.id}`,
+    label: formatAchievementLabel(achievement),
     parentId: null,
     tagIds: [RA_PROGRESS_BAR_ID],
     excludeFromCompletion: true,
@@ -76,8 +84,13 @@ export function mergeRetroAchievements(
 
   for (const achievement of info.achievements) {
     const id = achievementCheckboxId(achievement.id);
-    if (existingIds.has(id)) continue;
-    mergedManaged.push(buildAchievementCheckbox(achievement));
+    const next = buildAchievementCheckbox(achievement);
+    const existing = mergedManaged.find((checkbox) => checkbox.id === id);
+    if (existing) {
+      existing.label = next.label;
+      continue;
+    }
+    mergedManaged.push(next);
     existingIds.add(id);
   }
 
@@ -97,6 +110,7 @@ function renderAchievementRow(
   const stateClass = checked ? 'is-checked' : 'is-unchecked';
   const badge = achievementBadgeUrl(achievement.badgeName);
   const pointsLabel = achievement.points > 0 ? `${achievement.points} pts` : '';
+  const label = formatAchievementLabel(achievement);
 
   return `
     <li class="achievement-row managed-checkbox ${stateClass}" data-cb-id="${escapeHtml(id)}" data-cb-depth="0">
@@ -108,15 +122,8 @@ function renderAchievementRow(
             : '<span class="achievement-badge achievement-badge-placeholder" aria-hidden="true"></span>'
         }
         <span class="achievement-text">
-          <span class="achievement-title">
-            ${escapeHtml(achievement.title || `Achievement ${achievement.id}`)}
-            ${pointsLabel ? `<span class="achievement-points">${escapeHtml(pointsLabel)}</span>` : ''}
-          </span>
-          ${
-            achievement.description
-              ? `<span class="achievement-desc">${escapeHtml(achievement.description)}</span>`
-              : ''
-          }
+          <span class="managed-checkbox-text achievement-label">${escapeHtml(label)}</span>
+          ${pointsLabel ? `<span class="achievement-points">${escapeHtml(pointsLabel)}</span>` : ''}
         </span>
       </label>
     </li>
