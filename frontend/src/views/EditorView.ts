@@ -8,6 +8,8 @@ import { wireCollapsiblePanels } from '../components/CollapsiblePanel.js';
 import { mountProgressBarsEditor } from '../components/ProgressBarsEditor.js';
 import { mountEditorAdmin } from '../components/EditorAdmin.js';
 import { mountMobyGamesAdmin } from '../components/MobyGamesAdmin.js';
+import { mountRetroAchievementsAdmin } from '../components/RetroAchievementsAdmin.js';
+import { RA_PROGRESS_BAR_NAME } from '../markdown/retroAchievements.js';
 import { mountEditorTabs } from '../components/EditorTabs.js';
 import { mountImageEditor } from '../components/ImageEditor.js';
 import { mountMapsEditor } from '../components/MapsEditor.js';
@@ -158,6 +160,7 @@ export async function renderEditor(
               ${renderEditorTabHelp('admin')}
             </div>
             <div id="mobygames-admin" class="mb-4"></div>
+            <div id="retroachievements-admin" class="mb-4"></div>
             <div id="editor-admin"></div>
           </div>
         </div>
@@ -187,6 +190,7 @@ export async function renderEditor(
   let cleanupPagesEditor: (() => void) | null = null;
   let cleanupAdmin: (() => void) | null = null;
   let cleanupMobyGamesAdmin: (() => void) | null = null;
+  let cleanupRetroAchievementsAdmin: (() => void) | null = null;
   let cleanupTabs: (() => void) | null = null;
   let getProgressBarsData: (() => import('../types/index.js').ProgressBarsData) | null = null;
   let getJournalData: (() => import('../types/index.js').FullJournalData) | null = null;
@@ -717,6 +721,38 @@ export async function renderEditor(
         cleanupMobyGamesAdmin = mountMobyGamesAdmin(mobyGamesHost, activeSlug, gameName);
       }
 
+      const retroAchievementsHost = container.querySelector(
+        '#retroachievements-admin',
+      ) as HTMLElement;
+      if (isNew) {
+        retroAchievementsHost.innerHTML =
+          '<p class="text-muted text-sm">Link RetroAchievements after saving the game.</p>';
+      } else if (activeSlug) {
+        cleanupRetroAchievementsAdmin = mountRetroAchievementsAdmin(
+          retroAchievementsHost,
+          activeSlug,
+          {
+            getCheckboxes: () => getCheckboxesData?.().checkboxes ?? [],
+            upsertCheckboxes: (items) => {
+              checkboxesEditor.upsertCheckboxes(items);
+            },
+            removeCheckbox: (id) => {
+              checkboxesEditor.removeCheckbox(id);
+            },
+            ensureAchievementsProgressBar: () => {
+              const bars = getProgressBarsData?.().tags ?? [];
+              if (!findProgressBarByName(bars, RA_PROGRESS_BAR_NAME)) {
+                progressBarsEditor.addProgressBar(RA_PROGRESS_BAR_NAME);
+              }
+            },
+            onChanged: () => {
+              void refreshEmbedContext();
+              scheduleAutosave();
+            },
+          },
+        );
+      }
+
       const getEmbedContext = () => ({
         checkboxes: getCheckboxesData?.().checkboxes ?? [],
         progressBars: getProgressBarsData?.().tags ?? [],
@@ -922,6 +958,7 @@ export async function renderEditor(
     cleanupCheckboxesEditor?.();
     cleanupProgressBarsEditor?.();
     cleanupMobyGamesAdmin?.();
+    cleanupRetroAchievementsAdmin?.();
     cleanupAdmin?.();
     markdownEditor.destroy();
     document.removeEventListener('keydown', onKeyDown);

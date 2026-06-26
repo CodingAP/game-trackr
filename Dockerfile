@@ -2,6 +2,8 @@ FROM node:24-alpine AS builder
 
 WORKDIR /app
 
+RUN apk add --no-cache librsvg
+
 COPY package.json package-lock.json ./
 RUN npm ci
 

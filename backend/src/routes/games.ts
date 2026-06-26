@@ -20,6 +20,10 @@ import {
   readMobyGamesInfo,
   readMobyGamesLink,
   readMobyGamesStore,
+  readRetroAchievementsInfo,
+  readRetroAchievementsLink,
+  writeRetroAchievementsLink,
+  deleteRetroAchievementsLink,
   updateMobyGamesCachedInfo,
   writeCheckboxes,
   writeCompletionTags,
@@ -35,6 +39,10 @@ import { requireAuth } from '../middleware/auth.js';
 import { createUploadMiddleware, imagePublicPath } from '../middleware/upload.js';
 import { downloadRemoteImage } from '../services/fetchRemoteImage.js';
 import { isMobyGamesConfigured, fetchMobyGameInfo } from '../services/mobygames.js';
+import {
+  isRetroAchievementsConfigured,
+  parseRetroAchievementsGameId,
+} from '../services/retroachievements.js';
 import type {
   CheckboxConnectionsData,
   CompletionTagsData,
@@ -509,6 +517,78 @@ router.delete('/:slug/mobygames', requireAuth, async (req, res) => {
   }
 
   await deleteMobyGamesLink(slug);
+  res.status(204).send();
+});
+
+router.get('/:slug/retroachievements', async (req, res) => {
+  const slug = readSlug(req);
+  const game = await getGame(slug);
+  if (!game) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  const configured = isRetroAchievementsConfigured();
+  const link = await readRetroAchievementsLink(slug);
+
+  if (!link) {
+    res.json({ configured, link: null, info: null });
+    return;
+  }
+
+  try {
+    const refresh = req.query.refresh === '1' || req.query.refresh === 'true';
+    const info = await readRetroAchievementsInfo(slug, { refresh });
+    res.json({ configured, link, info });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Failed to load RetroAchievements info';
+    res.status(502).json({ error: message, link, info: null });
+  }
+});
+
+router.put('/:slug/retroachievements', requireAuth, async (req, res) => {
+  const slug = readSlug(req);
+  const game = await getGame(slug);
+  if (!game) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  if (!isRetroAchievementsConfigured()) {
+    res.status(503).json({
+      error: 'RetroAchievements API key is not configured. Set RETROACHIEVEMENTS_API_KEY.',
+    });
+    return;
+  }
+
+  const reference = (req.body as { gameId?: number | string })?.gameId;
+  const gameId =
+    reference === undefined ? null : parseRetroAchievementsGameId(reference);
+  if (!gameId) {
+    res.status(400).json({ error: 'A valid RetroAchievements game id or URL is required' });
+    return;
+  }
+
+  try {
+    const info = await writeRetroAchievementsLink(slug, gameId);
+    res.json({ link: { gameId, linkedAt: new Date().toISOString() }, info });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Failed to link RetroAchievements game';
+    res.status(502).json({ error: message });
+  }
+});
+
+router.delete('/:slug/retroachievements', requireAuth, async (req, res) => {
+  const slug = readSlug(req);
+  const game = await getGame(slug);
+  if (!game) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  await deleteRetroAchievementsLink(slug);
   res.status(204).send();
 });
 

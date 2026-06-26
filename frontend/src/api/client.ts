@@ -20,6 +20,9 @@ import type {
   MobyGamesGameInfo,
   MobyGamesGameResponse,
   MobyGamesSearchHit,
+  RetroAchievementsGameInfo,
+  RetroAchievementsGameResponse,
+  RetroAchievementsLink,
   UploadedImage,
 } from '../types/index.js';
 
@@ -433,5 +436,59 @@ export async function unlinkMobyGamesEntry(slug: string): Promise<void> {
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(body.error ?? 'Failed to unlink MobyGames entry');
+  }
+}
+
+export async function fetchRetroAchievementsStatus(): Promise<{ configured: boolean }> {
+  return request<{ configured: boolean }>('/api/retroachievements/status');
+}
+
+export async function fetchRetroAchievementsForGame(
+  slug: string,
+  options: { refresh?: boolean } = {},
+): Promise<RetroAchievementsGameResponse> {
+  const params = options.refresh ? '?refresh=1' : '';
+  const response = await fetch(`/api/games/${slug}/retroachievements${params}`);
+  const body = await response.json().catch(() => ({ error: response.statusText }));
+  if (!response.ok && response.status !== 503) {
+    throw new Error(body.error ?? 'Failed to load RetroAchievements info');
+  }
+  return {
+    configured: body.configured ?? false,
+    link: body.link ?? null,
+    info: body.info ?? null,
+  };
+}
+
+export async function linkRetroAchievements(
+  slug: string,
+  gameId: number,
+): Promise<{ link: RetroAchievementsLink; info: RetroAchievementsGameInfo }> {
+  return request<{ link: RetroAchievementsLink; info: RetroAchievementsGameInfo }>(
+    `/api/games/${slug}/retroachievements`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameId }),
+    },
+    true,
+  );
+}
+
+export async function unlinkRetroAchievements(slug: string): Promise<void> {
+  const response = await fetch(`/api/games/${slug}/retroachievements`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+
+  if (response.status === 401) {
+    clearStoredAuth();
+    window.dispatchEvent(new CustomEvent('game-trackr:auth-changed'));
+    throw new AuthRequiredError('Your session expired. Sign in again.');
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(body.error ?? 'Failed to unlink RetroAchievements game');
   }
 }

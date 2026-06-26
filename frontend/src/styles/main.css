@@ -353,8 +353,16 @@
     @apply flex flex-col gap-3 sm:flex-row;
   }
 
+  .library-page-header {
+    @apply mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between;
+  }
+
+  .library-page-header-intro {
+    @apply min-w-0;
+  }
+
   .library-game-actions {
-    @apply flex flex-col gap-2 sm:flex-row;
+    @apply flex flex-col gap-2 sm:flex-row sm:flex-wrap;
   }
 
   .library-game-actions .btn-primary,
@@ -363,7 +371,7 @@
   }
 
   .library-header-actions {
-    @apply flex flex-col gap-2 sm:flex-row sm:flex-wrap;
+    @apply flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap;
   }
 
   .library-header-actions .btn-primary,
@@ -372,17 +380,18 @@
   }
 
   .library-view-toggle-host {
-    @apply mt-3;
+    @apply mt-3 min-w-0;
   }
 
   .library-view-toggle {
-    @apply inline-flex overflow-hidden rounded-lg border;
+    @apply flex w-full overflow-hidden rounded-lg border sm:inline-flex sm:w-auto;
     border-color: rgb(var(--border));
   }
 
   .library-view-toggle-btn {
-    @apply px-3 py-1.5 text-sm;
+    @apply inline-flex min-h-11 flex-1 items-center justify-center px-3 py-2 text-sm sm:min-h-0 sm:flex-none sm:py-1.5;
     color: rgb(var(--text-muted));
+    touch-action: manipulation;
   }
 
   .library-view-toggle-btn.is-active {
@@ -391,11 +400,11 @@
   }
 
   .library-controls {
-    @apply mb-4 flex flex-wrap items-center gap-3;
+    @apply mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3;
   }
 
   .library-sort {
-    @apply inline-flex items-center gap-2;
+    @apply flex w-full min-w-0 items-center gap-2 sm:inline-flex sm:w-auto;
   }
 
   .library-sort-label {
@@ -403,23 +412,43 @@
   }
 
   .library-sort-select {
-    @apply min-w-0 py-1 text-sm;
+    @apply min-w-0 flex-1 py-1 text-sm sm:flex-none;
+  }
+
+  .collapsible-panel-actions .library-sort {
+    @apply w-auto flex-1 sm:flex-none;
   }
 
   .collapsible-panel-actions .library-sort-select {
-    @apply w-32;
+    @apply w-full min-w-0 sm:w-32;
   }
 
   .library-collection-list {
     @apply min-w-0;
   }
 
+  .library-collection-panel .collapsible-panel-header {
+    @apply flex-wrap gap-x-2 gap-y-2;
+  }
+
+  .library-collection-panel .collapsible-panel-toggle {
+    @apply order-1 min-w-0 flex-1;
+  }
+
+  .library-collection-panel .collapsible-panel-expand {
+    @apply order-2;
+  }
+
+  .library-collection-panel .collapsible-panel-actions {
+    @apply order-3 w-full basis-full justify-between gap-2 sm:order-none sm:w-auto sm:basis-auto sm:justify-end;
+  }
+
   .library-collection-panel.collapsible-panel .collapsible-panel-title {
-    @apply flex items-center gap-2;
+    @apply flex min-w-0 items-center gap-2;
   }
 
   .library-collection-title {
-    @apply inline-flex min-w-0 items-center gap-2;
+    @apply min-w-0 truncate;
   }
 
   .library-collection-thumb {
@@ -1832,20 +1861,20 @@
   }
 
   .library-game-card.collapsible-panel .collapsible-panel-title {
-    @apply text-lg font-semibold normal-case tracking-normal sm:text-xl;
+    @apply block truncate text-lg font-semibold normal-case tracking-normal sm:text-xl;
     color: rgb(var(--text-heading));
   }
 
   .library-game-moby {
-    @apply flex items-start gap-3;
+    @apply flex flex-col items-start gap-3 sm:flex-row;
   }
 
   .library-game-cover {
-    @apply block h-auto w-auto max-h-32 max-w-[5.25rem] shrink-0 rounded;
+    @apply mx-auto block h-auto w-auto max-h-32 max-w-[5.25rem] shrink-0 rounded sm:mx-0;
   }
 
   .library-game-description {
-    @apply min-w-0 flex-1 text-sm leading-relaxed;
+    @apply w-full min-w-0 text-sm leading-relaxed sm:flex-1;
     color: rgb(var(--text-muted));
   }
 
@@ -2335,6 +2364,73 @@
 
   .managed-checkbox input[type='checkbox'] {
     @apply mt-0.5;
+  }
+
+  .achievements-panel-inner {
+    @apply space-y-3;
+  }
+
+  .achievement-list {
+    @apply m-0 grid max-h-[500px] list-none gap-1.5 overflow-y-auto p-0 pr-1 sm:grid-cols-2 lg:grid-cols-3;
+  }
+
+  .achievement-row {
+    @apply list-none;
+  }
+
+  .achievement-row-label {
+    @apply items-center gap-2 px-2.5 py-2;
+  }
+
+  .achievement-badge {
+    @apply h-9 w-9 shrink-0 rounded-md object-contain;
+    background-color: rgb(var(--surface-muted));
+    transition: filter 0.2s ease, opacity 0.2s ease;
+  }
+
+  .achievement-badge-placeholder {
+    @apply inline-block border;
+    border-color: rgb(var(--border-subtle));
+  }
+
+  .achievement-row.is-unchecked .achievement-badge {
+    filter: grayscale(1);
+    opacity: 0.55;
+  }
+
+  .achievement-text {
+    @apply flex min-w-0 flex-1 flex-col gap-0.5;
+  }
+
+  .achievement-title {
+    @apply flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-medium;
+    color: rgb(var(--text-heading));
+  }
+
+  .achievement-points {
+    @apply shrink-0 rounded-full px-1.5 py-0.5 text-[0.6rem] font-medium uppercase tracking-wide;
+    background-color: rgb(var(--accent) / 0.15);
+    color: rgb(var(--accent-soft));
+  }
+
+  .achievement-desc {
+    @apply line-clamp-2 text-xs leading-snug;
+    color: rgb(var(--text-muted));
+  }
+
+  .achievement-empty {
+    @apply list-none py-2;
+  }
+
+  .ra-linked {
+    @apply rounded-lg border p-3;
+    border-color: rgb(var(--border-subtle));
+    background-color: rgb(var(--surface-muted) / 0.35);
+  }
+
+  .ra-linked-icon {
+    @apply h-12 w-12 shrink-0 rounded-md object-contain;
+    background-color: rgb(var(--surface-muted));
   }
 
   .checkbox-tags-empty {

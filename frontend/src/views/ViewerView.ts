@@ -5,6 +5,7 @@ import {
   fetchGameJournal,
   fetchMaps,
   fetchMobyGamesForGame,
+  fetchRetroAchievementsForGame,
 } from '../api/client.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from '../components/CollapsiblePanel.js';
 import { renderGameInfoHtml, wireGameInfoPanel } from '../components/GameInfoPanel.js';
@@ -12,11 +13,19 @@ import { renderNotesPanelHtml, wireNotesPanel } from '../components/NotesPanel.j
 import { wirePlaytimePanel } from '../components/PlaytimePanel.js';
 import { wireReturnToTop } from '../components/ReturnToTop.js';
 import {
+  computeTagProgress,
   mountTagProgressBlocks,
   preprocessTagProgressMarkdown,
   refreshProgressUi,
   renderCompletionSummaryHtml,
+  renderProgressBarHtml,
 } from '../markdown/completionProgress.js';
+import {
+  mergeRetroAchievements,
+  renderAchievementRows,
+  RA_PROGRESS_BAR_ID,
+  RA_PROGRESS_BAR_NAME,
+} from '../markdown/retroAchievements.js';
 import {
   applyImageSources,
   applyImageViewports,
@@ -60,20 +69,35 @@ export async function renderViewer(
   container.innerHTML = '<p class="text-muted">Loading journal...</p>';
 
   try {
-    const [game, journal, checkboxesData, progressBarsData, mapsData, mobyData] = await Promise.all([
-      fetchGame(slug),
-      fetchGameJournal(slug),
-      fetchCheckboxConnections(slug),
-      fetchProgressBars(slug),
-      fetchMaps(slug),
-      fetchMobyGamesForGame(slug).catch(() => ({
-        configured: false,
-        link: null,
-        info: null,
-      })),
-    ]);
-    const progressBars = progressBarsData.tags;
-    const managed = checkboxesData.checkboxes;
+    const [game, journal, checkboxesData, progressBarsData, mapsData, mobyData, raData] =
+      await Promise.all([
+        fetchGame(slug),
+        fetchGameJournal(slug),
+        fetchCheckboxConnections(slug),
+        fetchProgressBars(slug),
+        fetchMaps(slug),
+        fetchMobyGamesForGame(slug).catch(() => ({
+          configured: false,
+          link: null,
+          info: null,
+        })),
+        fetchRetroAchievementsForGame(slug).catch(() => ({
+          configured: false,
+          link: null,
+          info: null,
+        })),
+      ]);
+
+    const raInfo =
+      raData.info && raData.info.achievements.length > 0 ? raData.info : null;
+
+    let progressBars = progressBarsData.tags;
+    let managed = checkboxesData.checkboxes;
+    if (raInfo) {
+      const merged = mergeRetroAchievements(managed, progressBars, raInfo);
+      managed = merged.managed;
+      progressBars = merged.bars;
+    }
     const checkboxes = managedToCheckboxItems(managed);
     const progress = getProgress(slug);
     const viewportSettings = getImageViewportSettings();
@@ -85,6 +109,28 @@ export async function renderViewer(
       progress.checkedItems,
       managed,
     );
+
+    const achievementsBar = raInfo
+      ? progressBars.find((bar) => bar.id === RA_PROGRESS_BAR_ID)
+      : undefined;
+    const achievementsHtml =
+      raInfo && achievementsBar
+        ? renderCollapsiblePanel({
+            id: 'achievements-section',
+            title: RA_PROGRESS_BAR_NAME,
+            className: 'achievements-section',
+            content: `
+              <div class="achievements-panel-inner">
+                ${renderProgressBarHtml(
+                  RA_PROGRESS_BAR_NAME,
+                  computeTagProgress(achievementsBar, progress.checkedItems, checkboxes, managed),
+                  { tagId: RA_PROGRESS_BAR_ID },
+                )}
+                <ul id="achievements-list" class="achievement-list"></ul>
+              </div>
+            `,
+          })
+        : '';
 
     const sortedPages = [...journal.pages].sort((a, b) => a.order - b.order);
     let activePageId = params.page ?? sortedPages[0]?.id ?? 'main';
@@ -112,6 +158,7 @@ export async function renderViewer(
 
         ${gameInfoHtml}
         ${summaryHtml}
+        ${achievementsHtml}
         ${renderNotesPanelHtml()}
 
         <div class="viewer-layout">
@@ -169,8 +216,14 @@ export async function renderViewer(
       applyImageViewports(body, viewportSettings);
       cleanupImageLinks?.();
       cleanupImageLinks = wireClickableJournalImages(body);
+
+      const achievementsList = container.querySelector('#achievements-list');
+      if (raInfo && achievementsList) {
+        achievementsList.innerHTML = renderAchievementRows(raInfo, progress.checkedItems);
+      }
+
       const syncCheckboxVisuals = wireCheckboxes(
-        body,
+        container,
         slug,
         checkboxes,
         progress.checkedItems,

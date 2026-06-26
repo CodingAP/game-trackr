@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import authRouter from './routes/auth.js';
 import gamesRouter from './routes/games.js';
 import mobyGamesRouter from './routes/mobygames.js';
+import retroAchievementsRouter from './routes/retroachievements.js';
 import { isAuthConfigured } from './services/auth.js';
 import { DATA_DIR } from './storage/games.js';
 
@@ -19,6 +20,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use('/uploads/games', express.static(path.join(DATA_DIR)));
 app.use('/api/auth', authRouter);
 app.use('/api/mobygames', mobyGamesRouter);
+app.use('/api/retroachievements', retroAchievementsRouter);
 app.use('/api/games', gamesRouter);
 app.use(express.static(PUBLIC_DIR));
 

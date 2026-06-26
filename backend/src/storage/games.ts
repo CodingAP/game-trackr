@@ -23,6 +23,8 @@ import {
 } from '../migration/journal.js';
 import type { MobyGamesGameInfo } from '../services/mobygames.js';
 import { fetchMobyGameInfo } from '../services/mobygames.js';
+import type { RetroAchievementsGameInfo } from '../services/retroachievements.js';
+import { fetchRetroAchievementsGame } from '../services/retroachievements.js';
 import {
   filterImageFilenames,
   MAX_MEDIA_BYTES,
@@ -36,6 +38,13 @@ interface MobyGamesStore {
   cachedInfo?: MobyGamesGameInfo;
   cachedAt?: string;
   cacheEdited?: boolean;
+}
+
+interface RetroAchievementsStore {
+  gameId: number;
+  linkedAt: string;
+  cachedInfo?: RetroAchievementsGameInfo;
+  cachedAt?: string;
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -197,6 +206,10 @@ export function imageLibraryPath(slug: string): string {
 
 export function mobyGamesLinkPath(slug: string): string {
   return path.join(gameDir(slug), 'mobygames.json');
+}
+
+export function retroAchievementsLinkPath(slug: string): string {
+  return path.join(gameDir(slug), 'retroachievements.json');
 }
 
 export async function getGame(slug: string): Promise<GameMeta | undefined> {
@@ -634,6 +647,95 @@ export async function readMobyGamesInfo(
     }
     throw error;
   }
+}
+
+export async function readRetroAchievementsStore(
+  slug: string,
+): Promise<RetroAchievementsStore | null> {
+  try {
+    const raw = await fs.readFile(retroAchievementsLinkPath(slug), 'utf-8');
+    const parsed = JSON.parse(raw) as RetroAchievementsStore;
+    if (!parsed?.gameId) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function writeRetroAchievementsStore(
+  slug: string,
+  store: RetroAchievementsStore,
+): Promise<void> {
+  await fs.writeFile(retroAchievementsLinkPath(slug), JSON.stringify(store, null, 2));
+}
+
+export async function readRetroAchievementsLink(slug: string) {
+  const store = await readRetroAchievementsStore(slug);
+  if (!store?.gameId) return null;
+  return { gameId: store.gameId, linkedAt: store.linkedAt };
+}
+
+function isRetroCacheFresh(store: RetroAchievementsStore): boolean {
+  if (!store.cachedInfo || !store.cachedAt) return false;
+  const age = Date.now() - new Date(store.cachedAt).getTime();
+  return age >= 0 && age < getCacheTtlMs();
+}
+
+export async function writeRetroAchievementsLink(
+  slug: string,
+  gameId: number,
+  info?: RetroAchievementsGameInfo,
+): Promise<RetroAchievementsGameInfo> {
+  const game = await getGame(slug);
+  if (!game) {
+    throw new Error('Game not found');
+  }
+
+  const resolved = info ?? (await fetchRetroAchievementsGame(gameId));
+  const now = new Date().toISOString();
+  await writeRetroAchievementsStore(slug, {
+    gameId,
+    linkedAt: now,
+    cachedInfo: resolved,
+    cachedAt: now,
+  });
+  await touchGameUpdatedAt(slug);
+  return resolved;
+}
+
+export async function readRetroAchievementsInfo(
+  slug: string,
+  options: { refresh?: boolean } = {},
+): Promise<RetroAchievementsGameInfo | null> {
+  const store = await readRetroAchievementsStore(slug);
+  if (!store) return null;
+
+  if (!options.refresh && store.cachedInfo && isRetroCacheFresh(store)) {
+    return store.cachedInfo;
+  }
+
+  try {
+    const info = await fetchRetroAchievementsGame(store.gameId);
+    await writeRetroAchievementsStore(slug, {
+      ...store,
+      cachedInfo: info,
+      cachedAt: new Date().toISOString(),
+    });
+    return info;
+  } catch (error) {
+    if (store.cachedInfo) return store.cachedInfo;
+    throw error;
+  }
+}
+
+export async function deleteRetroAchievementsLink(slug: string): Promise<void> {
+  const game = await getGame(slug);
+  if (!game) {
+    throw new Error('Game not found');
+  }
+
+  await fs.rm(retroAchievementsLinkPath(slug), { force: true });
+  await touchGameUpdatedAt(slug);
 }
 
 export async function deleteGame(slug: string): Promise<void> {

@@ -186,6 +186,8 @@ export function mountCheckboxConnectionsEditor(
 ): {
   getData: () => CheckboxConnectionsData;
   addCheckbox: (checkbox: ManagedCheckbox) => boolean;
+  upsertCheckboxes: (incoming: ManagedCheckbox[]) => boolean;
+  removeCheckbox: (id: string) => boolean;
   updateCheckbox: (
     id: string,
     updates: { id?: string; label?: string },
@@ -647,9 +649,59 @@ export function mountCheckboxConnectionsEditor(
         label: checkbox.label,
         parentId: checkbox.parentId,
         tagIds: [...checkbox.tagIds],
+        excludeFromCompletion: checkbox.excludeFromCompletion,
       });
       selectedId = checkbox.id;
       showAddPanel = false;
+      render();
+      return true;
+    },
+    upsertCheckboxes: (incoming: ManagedCheckbox[]) => {
+      let changed = false;
+
+      for (const next of incoming) {
+        const existing = checkboxes.find((entry) => entry.id === next.id);
+        if (existing) {
+          if (next.label && existing.label !== next.label) {
+            existing.label = next.label;
+            changed = true;
+          }
+          for (const tagId of next.tagIds) {
+            if (!existing.tagIds.includes(tagId)) {
+              existing.tagIds.push(tagId);
+              changed = true;
+            }
+          }
+          continue;
+        }
+
+        checkboxes.push({
+          id: next.id,
+          label: next.label,
+          parentId: next.parentId,
+          tagIds: [...next.tagIds],
+          excludeFromCompletion: next.excludeFromCompletion,
+        });
+        changed = true;
+      }
+
+      if (changed) {
+        showAddPanel = false;
+        render();
+      }
+      return changed;
+    },
+    removeCheckbox: (id: string) => {
+      if (!checkboxes.some((entry) => entry.id === id)) return false;
+      if (selectedId === id) selectedId = null;
+      checkboxes = checkboxes
+        .filter((entry) => entry.id !== id)
+        .map((entry) => ({
+          ...entry,
+          parentId: entry.parentId === id ? null : entry.parentId,
+        }));
+      selectedId = resolveEditorSelection(checkboxes, selectedId);
+      if (checkboxes.length === 0) showAddPanel = true;
       render();
       return true;
     },

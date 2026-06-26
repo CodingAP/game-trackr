@@ -707,14 +707,14 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
 
       container.innerHTML = `
         <div class="app-shell">
-          <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
-            <div>
+          <header class="library-page-header">
+            <div class="library-page-header-intro">
               <h1 class="page-heading mb-1">Game Library</h1>
               <p class="text-muted">Pick a journal to track your completion progress.</p>
               <div id="library-view-toggle-host" class="library-view-toggle-host">${renderViewToggle(state.viewMode)}</div>
             </div>
             ${renderLibraryHeaderActions(signedIn)}
-          </div>
+          </header>
           <div id="library-body">${body}</div>
         </div>
       `;

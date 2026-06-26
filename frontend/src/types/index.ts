@@ -189,6 +189,34 @@ export interface MobyGamesGameResponse {
 
 export type MobyGamesCacheUpdate = Partial<Omit<MobyGamesGameInfo, 'gameId'>>;
 
+export interface RetroAchievement {
+  id: number;
+  title: string;
+  description: string;
+  points: number;
+  badgeName: string;
+  displayOrder: number;
+}
+
+export interface RetroAchievementsGameInfo {
+  gameId: number;
+  title: string;
+  iconUrl: string | null;
+  consoleName: string | null;
+  achievements: RetroAchievement[];
+}
+
+export interface RetroAchievementsLink {
+  gameId: number;
+  linkedAt: string;
+}
+
+export interface RetroAchievementsGameResponse {
+  configured: boolean;
+  link: RetroAchievementsLink | null;
+  info: RetroAchievementsGameInfo | null;
+}
+
 export const JOURNAL_EXPORT_VERSION = 2;
 export const JOURNAL_EXPORT_VERSION_LEGACY = 1;
 
