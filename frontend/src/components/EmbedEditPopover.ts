@@ -251,7 +251,10 @@ function renderImageMetadataForm(
   const titleAttr = embedTitle ? ` title="${escapeHtml(embedTitle)}"` : '';
   const isVideo = isVideoUrl(parsed.url);
   const maintainAspectRatio =
-    parsed.viewport?.maintainAspectRatio ?? getImageViewportSettings().maintainAspectRatio;
+    parsed.viewport?.widthUnit === '%' ||
+    parsed.viewport?.maintainAspectRatio ||
+    getImageViewportSettings().maintainAspectRatio;
+  const maintainAspectDisabled = parsed.viewport?.widthUnit === '%';
   const figureClass = isVideo
     ? `embed-edit-image-preview media-figure${parsed.centered ? ' media-figure-centered' : ''}`
     : `embed-edit-image-preview image-figure${parsed.centered ? ' image-figure-centered' : ''}`;
@@ -300,8 +303,8 @@ function renderImageMetadataForm(
         <span>Scale to fit viewport</span>
       </label>
       <label class="settings-check">
-        <input type="checkbox" data-field="maintain-aspect" ${maintainAspectRatio ? 'checked' : ''} />
-        <span>Maintain aspect ratio</span>
+        <input type="checkbox" data-field="maintain-aspect" ${maintainAspectRatio ? 'checked' : ''} ${maintainAspectDisabled ? 'disabled' : ''} />
+        <span>Maintain aspect ratio${maintainAspectDisabled ? ' (required for % width)' : ''}</span>
       </label>
       <label class="settings-check">
         <input type="checkbox" data-field="center" ${parsed.centered ? 'checked' : ''} />

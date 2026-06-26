@@ -26,10 +26,12 @@ export function renderListSearchBar(options: {
   id?: string;
   placeholder?: string;
   className?: string;
+  value?: string;
 } = {}): string {
   const id = options.id ?? 'list-search';
   const placeholder = options.placeholder ?? 'Search...';
   const className = options.className ?? 'mb-3';
+  const value = options.value ?? '';
 
   return `
     <div class="list-search ${className}">
@@ -40,6 +42,7 @@ export function renderListSearchBar(options: {
           class="list-search-input"
           data-list-search
           id="${escapeHtml(id)}"
+          value="${escapeHtml(value)}"
           placeholder="${escapeHtml(placeholder)}"
           autocomplete="off"
           aria-label="${escapeHtml(placeholder)}"

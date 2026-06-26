@@ -347,6 +347,41 @@ export async function exportGameJournal(slug: string): Promise<JournalExportBund
   return request<JournalExportBundle>(`/api/games/${slug}/export`, undefined, true);
 }
 
+export async function downloadAllGamesExport(): Promise<void> {
+  const response = await fetch('/api/games/export/all', {
+    headers: authHeaders(),
+  });
+
+  if (response.status === 401) {
+    clearStoredAuth();
+    window.dispatchEvent(new CustomEvent('game-trackr:auth-changed'));
+    throw new AuthRequiredError('Your session expired. Sign in again.');
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(body.error ?? 'Failed to export games');
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `gametrackr-games-${new Date().toISOString().slice(0, 10)}.zip`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function resetAccountData(): Promise<{ deletedGames: number }> {
+  return request<{ deletedGames: number }>(
+    '/api/auth/reset',
+    {
+      method: 'POST',
+    },
+    true,
+  );
+}
+
 export async function importGameJournal(payload: ImportGameRequest): Promise<GameMeta> {
   return request<GameMeta>(
     '/api/games/import',
@@ -491,4 +526,15 @@ export async function unlinkRetroAchievements(slug: string): Promise<void> {
     const body = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(body.error ?? 'Failed to unlink RetroAchievements game');
   }
+}
+
+export async function deleteRetroAchievement(
+  slug: string,
+  achievementId: number,
+): Promise<RetroAchievementsGameInfo> {
+  return request<{ info: RetroAchievementsGameInfo }>(
+    `/api/games/${slug}/retroachievements/achievements/${achievementId}`,
+    { method: 'DELETE' },
+    true,
+  ).then((body) => body.info);
 }

@@ -21,7 +21,7 @@ import {
 import { resolveProgressBar, TAG_PROGRESS_MARKER } from '../markdown/completionProgress.js';
 import { MAP_MARKER, parseMapMarkerPayload, resolveMap, resolveMapEmbedLayout } from '../markdown/gameMaps.js';
 import { parseImageEmbedRaw } from '../markdown/imageDocument.js';
-import { parseViewportTitle } from '../markdown/images.js';
+import { formatViewportSizeLabel, parseViewportTitle } from '../markdown/images.js';
 import {
   formatManagedCheckboxLabel,
   getIndentDepth,
@@ -475,7 +475,12 @@ function findEmbeds(doc: string, context: MarkdownEmbedContext): EmbedMatch[] {
     const layout = resolveMapEmbedLayout(parsed, map);
     const displayLabel =
       parsed.viewport || parsed.start
-        ? `${mapName} (${layout.viewport.width}×${layout.viewport.height})`
+        ? `${mapName} (${formatViewportSizeLabel(
+            layout.viewport.width,
+            layout.viewport.height,
+            layout.viewport.widthUnit ?? 'px',
+            layout.viewport.heightUnit ?? 'px',
+          )})`
         : mapName;
     matches.push({
       from: match.index ?? 0,
@@ -497,7 +502,12 @@ function findEmbeds(doc: string, context: MarkdownEmbedContext): EmbedMatch[] {
     const viewport = title ? parseViewportTitle(title) : null;
     const filename = url.split('/').pop() ?? url;
     const displayLabel = viewport
-      ? `${alt || filename} (${viewport.width}×${viewport.height})`
+      ? `${alt || filename} (${formatViewportSizeLabel(
+          viewport.width,
+          viewport.height,
+          viewport.widthUnit ?? 'px',
+          viewport.heightUnit ?? 'px',
+        )})`
       : alt || filename;
     matches.push({
       from: match.index ?? 0,
@@ -522,7 +532,12 @@ function findEmbeds(doc: string, context: MarkdownEmbedContext): EmbedMatch[] {
 
     const filename = parsed.url.split('/').pop() ?? parsed.url;
     const displayLabel = parsed.viewport
-      ? `${parsed.alt || filename} (${parsed.viewport.width}×${parsed.viewport.height})`
+      ? `${parsed.alt || filename} (${formatViewportSizeLabel(
+          parsed.viewport.width,
+          parsed.viewport.height,
+          parsed.viewport.widthUnit ?? 'px',
+          parsed.viewport.heightUnit ?? 'px',
+        )})`
       : parsed.alt || filename;
     matches.push({
       from: start,

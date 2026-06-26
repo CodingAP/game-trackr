@@ -6,6 +6,7 @@ import {
   deleteGame,
   deleteMobyGamesLink,
   duplicateGame,
+  exportAllGamesArchive,
   exportGameJournal,
   getGame,
   imagesDir,
@@ -24,6 +25,7 @@ import {
   readRetroAchievementsLink,
   writeRetroAchievementsLink,
   deleteRetroAchievementsLink,
+  excludeRetroAchievement,
   updateMobyGamesCachedInfo,
   writeCheckboxes,
   writeCompletionTags,
@@ -239,6 +241,20 @@ router.get('/:slug/content', async (req, res) => {
     res.type('text/plain').send(content);
   } catch {
     res.status(404).json({ error: 'Content not found' });
+  }
+});
+
+router.get('/export/all', requireAuth, async (_req, res) => {
+  try {
+    const archive = await exportAllGamesArchive();
+    const date = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="gametrackr-games-${date}.zip"`);
+    res.send(Buffer.from(archive));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to export games';
+    const status = message === 'No games to export' ? 400 : 500;
+    res.status(status).json({ error: message });
   }
 });
 
@@ -578,6 +594,29 @@ router.put('/:slug/retroachievements', requireAuth, async (req, res) => {
       error instanceof Error ? error.message : 'Failed to link RetroAchievements game';
     res.status(502).json({ error: message });
   }
+});
+
+router.delete('/:slug/retroachievements/achievements/:achievementId', requireAuth, async (req, res) => {
+  const slug = readSlug(req);
+  const game = await getGame(slug);
+  if (!game) {
+    res.status(404).json({ error: 'Game not found' });
+    return;
+  }
+
+  const achievementId = Number(readRouteParam(req.params.achievementId));
+  if (!Number.isInteger(achievementId) || achievementId <= 0) {
+    res.status(400).json({ error: 'Invalid achievement id' });
+    return;
+  }
+
+  const info = await excludeRetroAchievement(slug, achievementId);
+  if (!info) {
+    res.status(404).json({ error: 'Achievement not found' });
+    return;
+  }
+
+  res.json({ info });
 });
 
 router.delete('/:slug/retroachievements', requireAuth, async (req, res) => {

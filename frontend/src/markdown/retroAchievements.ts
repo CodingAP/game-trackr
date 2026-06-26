@@ -47,9 +47,8 @@ export function formatAchievementLabel(achievement: RetroAchievement): string {
 
 /**
  * Achievements are modeled as top-level managed checkboxes tagged with the
- * shared "Achievements" progress bar. They are excluded from overall completion
- * so they only count toward their own progress bar, but can still be embedded
- * in the journal via `[[cb:ra-<id>]]` markers.
+ * shared "Achievements" progress bar. They always count toward overall
+ * completion and can be embedded in the journal via `[[cb:ra-<id>]]` markers.
  */
 export function buildAchievementCheckbox(achievement: RetroAchievement): ManagedCheckbox {
   return {
@@ -57,7 +56,6 @@ export function buildAchievementCheckbox(achievement: RetroAchievement): Managed
     label: formatAchievementLabel(achievement),
     parentId: null,
     tagIds: [RA_PROGRESS_BAR_ID],
-    excludeFromCompletion: true,
   };
 }
 
@@ -88,6 +86,7 @@ export function mergeRetroAchievements(
     const existing = mergedManaged.find((checkbox) => checkbox.id === id);
     if (existing) {
       existing.label = next.label;
+      delete existing.excludeFromCompletion;
       continue;
     }
     mergedManaged.push(next);
@@ -109,7 +108,6 @@ function renderAchievementRow(
   const checked = checkedItems[id] ?? false;
   const stateClass = checked ? 'is-checked' : 'is-unchecked';
   const badge = achievementBadgeUrl(achievement.badgeName);
-  const pointsLabel = achievement.points > 0 ? `${achievement.points} pts` : '';
   const label = formatAchievementLabel(achievement);
 
   return `
@@ -123,7 +121,6 @@ function renderAchievementRow(
         }
         <span class="achievement-text">
           <span class="managed-checkbox-text achievement-label">${escapeHtml(label)}</span>
-          ${pointsLabel ? `<span class="achievement-points">${escapeHtml(pointsLabel)}</span>` : ''}
         </span>
       </label>
     </li>

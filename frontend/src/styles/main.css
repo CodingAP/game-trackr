@@ -354,11 +354,58 @@
   }
 
   .library-page-header {
-    @apply mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between;
+    @apply relative z-20 mb-6 flex flex-col gap-4;
+  }
+
+  .library-page-header-row {
+    @apply flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between;
   }
 
   .library-page-header-intro {
     @apply min-w-0;
+  }
+
+  .library-search {
+    @apply w-full;
+  }
+
+  .library-search-inner {
+    @apply flex w-full items-center gap-2;
+  }
+
+  .library-search-field-wrap {
+    @apply min-w-0 flex-1;
+  }
+
+  .library-search-bar {
+    @apply mb-0;
+  }
+
+  .library-search .editor-tab-help {
+    @apply relative shrink-0;
+  }
+
+  .library-search .editor-tab-help-popover {
+    @apply right-0 left-auto z-50;
+    width: min(24rem, calc(100vw - 2rem));
+  }
+
+  .library-search-help-list {
+    @apply space-y-1 pl-4;
+    list-style-type: disc;
+  }
+
+  .library-search-help-platforms {
+    @apply max-h-40 overflow-y-auto;
+  }
+
+  .library-search .editor-tab-help-content .library-search-help-list code {
+    @apply rounded px-1 py-0.5 text-xs;
+    background-color: rgb(var(--surface-muted) / 0.7);
+  }
+
+  .library-page-header-controls {
+    @apply flex w-full shrink-0 flex-col gap-3 lg:w-auto lg:items-end;
   }
 
   .library-game-actions {
@@ -371,7 +418,7 @@
   }
 
   .library-header-actions {
-    @apply flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap;
+    @apply flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end;
   }
 
   .library-header-actions .btn-primary,
@@ -380,11 +427,11 @@
   }
 
   .library-view-toggle-host {
-    @apply mt-3 min-w-0;
+    @apply min-w-0;
   }
 
   .library-view-toggle {
-    @apply flex w-full overflow-hidden rounded-lg border sm:inline-flex sm:w-auto;
+    @apply flex w-full overflow-hidden rounded-lg border lg:w-auto;
     border-color: rgb(var(--border));
   }
 
@@ -428,23 +475,23 @@
   }
 
   .library-collection-panel .collapsible-panel-header {
-    @apply flex-wrap gap-x-2 gap-y-2;
+    @apply flex-wrap gap-x-2 gap-y-2 md:flex-nowrap md:items-center;
   }
 
   .library-collection-panel .collapsible-panel-toggle {
-    @apply order-1 min-w-0 flex-1;
+    @apply order-1 min-w-0 flex-1 md:order-none;
   }
 
   .library-collection-panel .collapsible-panel-expand {
-    @apply order-2;
+    @apply order-2 self-start md:order-none md:self-auto;
   }
 
   .library-collection-panel .collapsible-panel-actions {
-    @apply order-3 w-full basis-full justify-between gap-2 sm:order-none sm:w-auto sm:basis-auto sm:justify-end;
+    @apply order-3 w-full basis-full justify-end gap-2 md:order-none md:ml-auto md:w-auto md:basis-auto md:flex-nowrap;
   }
 
   .library-collection-panel.collapsible-panel .collapsible-panel-title {
-    @apply flex min-w-0 items-center gap-2;
+    @apply flex min-w-0 items-center gap-2 md:gap-3;
   }
 
   .library-collection-title {
@@ -478,6 +525,15 @@
 
   .library-game-grid {
     @apply grid gap-4 sm:grid-cols-2 lg:grid-cols-3;
+  }
+
+  .library-game-card-title {
+    @apply mb-3 block truncate text-lg font-semibold sm:text-xl;
+    color: rgb(var(--text-heading));
+  }
+
+  .library-game-card-body {
+    @apply min-w-0;
   }
 
   .library-card-stats {
@@ -535,9 +591,18 @@
     @apply max-h-[85vh] overflow-y-auto;
   }
 
-  .backup-collections {
+  .backup-section + .backup-section {
     @apply mt-6 border-t pt-6;
     border-color: rgb(var(--border-subtle));
+  }
+
+  .backup-reset-warning {
+    @apply p-4;
+  }
+
+  .backup-reset-list {
+    @apply space-y-1 pl-4;
+    list-style-type: disc;
   }
 
   .settings-section-title {
@@ -1075,12 +1140,16 @@
     @apply my-0 max-h-36 max-w-full rounded-lg border;
     border-color: rgb(var(--border));
     background-color: rgb(var(--surface-muted) / 0.5);
-    width: auto !important;
-    height: auto !important;
   }
 
   .embed-edit-image-preview .image-viewport-natural {
     @apply w-full overflow-hidden;
+    width: auto !important;
+    height: auto !important;
+  }
+
+  .embed-edit-image-preview .image-viewport-percent {
+    max-height: 9rem;
   }
 
   .embed-edit-image-preview .image-viewport-custom {
@@ -1089,8 +1158,12 @@
 
   .embed-edit-image-preview .image-viewport img {
     @apply block h-auto w-auto max-h-36 max-w-full rounded-lg object-contain;
-    width: auto !important;
+  }
+
+  .embed-edit-image-preview .image-viewport-percent img {
+    width: 100% !important;
     height: auto !important;
+    max-height: 9rem;
   }
 
   .embed-edit-image-preview .image-viewport-scale {
@@ -1518,6 +1591,23 @@
     @apply overflow-auto;
   }
 
+  .markdown-body .image-viewport-percent {
+    height: auto;
+    max-height: none;
+  }
+
+  .markdown-body .image-viewport-percent img.image-natural {
+    @apply block h-auto w-full max-w-full rounded-lg;
+  }
+
+  .markdown-body .image-viewport-percent.image-viewport-scale {
+    @apply overflow-hidden;
+  }
+
+  .markdown-body .image-viewport-percent.image-viewport-scale img.image-scaled {
+    @apply block h-full w-full rounded-lg object-contain;
+  }
+
   .markdown-body .image-viewport img.image-natural {
     @apply block h-auto w-auto max-w-none rounded-lg;
   }
@@ -1571,6 +1661,15 @@
 
   .markdown-body .media-viewport-custom {
     @apply overflow-auto;
+  }
+
+  .markdown-body .media-viewport-percent {
+    height: auto;
+    max-height: none;
+  }
+
+  .markdown-body .media-viewport-percent video {
+    @apply block h-auto w-full max-w-full rounded-lg;
   }
 
   .markdown-body .media-viewport video {
@@ -1857,11 +1956,6 @@
 
   .game-info.collapsible-panel .collapsible-panel-title {
     @apply text-xl font-semibold normal-case tracking-normal;
-    color: rgb(var(--text-heading));
-  }
-
-  .library-game-card.collapsible-panel .collapsible-panel-title {
-    @apply block truncate text-lg font-semibold normal-case tracking-normal sm:text-xl;
     color: rgb(var(--text-heading));
   }
 
@@ -2406,12 +2500,6 @@
     @apply min-w-0 flex-1;
   }
 
-  .achievement-points {
-    @apply shrink-0 rounded-full px-1.5 py-0.5 text-[0.6rem] font-medium uppercase tracking-wide;
-    background-color: rgb(var(--accent) / 0.15);
-    color: rgb(var(--accent-soft));
-  }
-
   .achievement-empty {
     @apply list-none py-2;
   }
@@ -2425,6 +2513,30 @@
   .ra-linked-icon {
     @apply h-12 w-12 shrink-0 rounded-md object-contain;
     background-color: rgb(var(--surface-muted));
+  }
+
+  .ra-achievement-admin-list {
+    @apply mt-4 border-t pt-4;
+    border-color: rgb(var(--border-subtle));
+  }
+
+  .ra-achievement-admin-items {
+    @apply m-0 max-h-64 list-none space-y-1 overflow-y-auto p-0;
+  }
+
+  .ra-achievement-admin-item {
+    @apply flex items-center justify-between gap-2 rounded-lg border px-2 py-1.5;
+    border-color: rgb(var(--border-subtle));
+    background-color: rgb(var(--surface-muted) / 0.35);
+  }
+
+  .ra-achievement-admin-label {
+    @apply min-w-0 flex-1 text-sm;
+    color: rgb(var(--text-muted));
+  }
+
+  .ra-achievement-admin-delete {
+    @apply inline-flex h-8 w-8 shrink-0 items-center justify-center p-0;
   }
 
   .checkbox-tags-empty {

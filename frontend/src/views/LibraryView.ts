@@ -2,14 +2,18 @@ import {
   fetchCheckboxConnections,
   fetchGames,
   fetchMobyGamesForGame,
+  fetchRetroAchievementsForGame,
 } from '../api/client.js';
 import { renderImportGameControls, wireImportGameButton } from '../components/ImportGameButton.js';
+import { renderHelpButton, wireEditorTabHelp } from '../components/editorTabHelp.js';
+import { renderListSearchBar } from '../components/listSearch.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from '../components/CollapsiblePanel.js';
 import { openCollectionEditDialog } from '../components/CollectionEditDialog.js';
 import { openCollectionMembershipDialog } from '../components/CollectionMembershipDialog.js';
-import { renderLibraryMobyHtml } from '../components/GameInfoPanel.js';
+import { extractLibraryMobyCardData, renderLibraryMobyHtml, type LibraryMobyCardData } from '../components/GameInfoPanel.js';
 import { getProgressCheckboxes, isCheckboxComplete, buildCheckboxIndex } from '../markdown/checkboxes.js';
 import { managedToCheckboxItems } from '../markdown/managedCheckboxes.js';
+import { mergeRetroAchievements } from '../markdown/retroAchievements.js';
 import { isLocallyAuthenticated } from '../storage/auth.js';
 import {
   createCollection,
@@ -43,11 +47,18 @@ import { icon, iconLabel } from '../components/icons.js';
 import type { GameMeta } from '../types/index.js';
 import { getEarliestReleaseSortKey } from '../utils/mobyReleaseDate.js';
 import { formatPlaytimeDuration } from '../utils/playtimeFormat.js';
+import {
+  buildLibrarySearchTarget,
+  collectLibraryPlatformCatalog,
+  filterSlugsByLibrarySearch,
+  type LibrarySearchTarget,
+} from '../utils/librarySearch.js';
 
 interface GameCardData {
   slug: string;
   name: string;
   mobyHtml: string;
+  moby: LibraryMobyCardData | null;
   releaseDateSortKey: number;
   completedCount: number;
   totalCount: number;
@@ -152,6 +163,96 @@ function sortSlugsForSection(
   return sortGameSlugs(slugs, sortMeta, getSectionSortMode(sectionId));
 }
 
+function renderCollectionCount(filtered: number, total: number, searchQuery: string): string {
+  if (!searchQuery.trim() || filtered === total) {
+    return String(filtered);
+  }
+  return `${filtered} / ${total}`;
+}
+
+function buildLibrarySearchHelp(searchTargets: Map<string, LibrarySearchTarget>): string {
+  const platforms = collectLibraryPlatformCatalog(searchTargets);
+
+  const platformSection =
+    platforms.length > 0
+      ? `
+      <p><strong>Platforms in your library</strong></p>
+      <p class="hint text-sm">Search with short names from this list, e.g. <code>platform:nes</code> or <code>platform:wii-u</code>.</p>
+      <ul class="library-search-help-list library-search-help-platforms">
+        ${platforms
+          .map(
+            (platform) =>
+              `<li><code>platform:${escapeHtml(platform.slug)}</code> — ${escapeHtml(platform.name)}</li>`,
+          )
+          .join('')}
+      </ul>
+    `
+      : `
+      <p><strong>Platforms in your library</strong></p>
+      <p class="hint text-sm">Link MobyGames on a game to see searchable platform short names here.</p>
+    `;
+
+  return `
+  <p><strong>Fields</strong></p>
+  <ul class="library-search-help-list">
+    <li><code>zelda</code> or <code>name:zelda</code> — game name</li>
+    <li><code>platform:nes</code> — platform short name (see list below)</li>
+    <li><code>date:1998</code> or <code>date:1998-11</code> — release date</li>
+    <li><code>added:2024</code> — date added to library</li>
+  </ul>
+  <p><strong>Operators</strong></p>
+  <ul class="library-search-help-list">
+    <li><code>mario AND platform:n64</code> — combine terms with AND, OR, and NOT</li>
+    <li><code>(platform:nes OR platform:snes) NOT date:1990</code> — use parentheses to group</li>
+  </ul>
+  ${platformSection}
+  `;
+}
+
+function renderLibrarySearch(
+  query: string,
+  searchTargets: Map<string, LibrarySearchTarget>,
+): string {
+  return `
+    <div class="library-search">
+      <div class="library-search-inner">
+        <div class="library-search-field-wrap">
+          ${renderListSearchBar({
+            id: 'library-search-input',
+            placeholder: 'Search games (name:mario platform:nes date:1996...)',
+            className: 'library-search-bar',
+            value: query,
+          })}
+        </div>
+        ${renderHelpButton(buildLibrarySearchHelp(searchTargets), 'Advanced search syntax')}
+      </div>
+    </div>
+  `;
+}
+
+function buildSearchTargets(
+  games: GameMeta[],
+  cards: Map<string, GameCardData>,
+): Map<string, LibrarySearchTarget> {
+  return new Map(
+    games.map((game) => {
+      const card = cards.get(game.slug);
+      return [
+        game.slug,
+        buildLibrarySearchTarget(card?.name ?? game.name, game.createdAt, card?.moby ?? null),
+      ];
+    }),
+  );
+}
+
+function filterVisibleSlugs(
+  slugs: string[],
+  searchQuery: string,
+  searchTargets: Map<string, LibrarySearchTarget>,
+): string[] {
+  return filterSlugsByLibrarySearch(slugs, searchQuery, searchTargets);
+}
+
 function renderLibraryHeaderActions(signedIn: boolean): string {
   if (!signedIn) return '';
 
@@ -194,24 +295,35 @@ async function buildGameCards(games: GameMeta[]): Promise<Map<string, GameCardDa
   const cards = await Promise.all(
     games.map(async (game) => {
       let mobyHtml = '';
+      let moby: LibraryMobyCardData | null = null;
       let releaseDateSortKey = Number.MAX_SAFE_INTEGER;
       let completedCount = 0;
       let totalCount = 0;
       let contentAvailable = false;
 
-      const [checkboxesResult, mobyResult] = await Promise.allSettled([
+      const [checkboxesResult, mobyResult, raResult] = await Promise.allSettled([
         fetchCheckboxConnections(game.slug),
         fetchMobyGamesForGame(game.slug),
+        fetchRetroAchievementsForGame(game.slug),
       ]);
 
       if (mobyResult.status === 'fulfilled' && mobyResult.value.info) {
         mobyHtml = renderLibraryMobyHtml(mobyResult.value.info);
+        moby = extractLibraryMobyCardData(mobyResult.value.info);
         releaseDateSortKey = getEarliestReleaseSortKey(mobyResult.value.info);
       }
 
       if (checkboxesResult.status === 'fulfilled') {
         try {
-          const checkboxes = managedToCheckboxItems(checkboxesResult.value.checkboxes);
+          let managed = checkboxesResult.value.checkboxes;
+          if (
+            raResult.status === 'fulfilled' &&
+            raResult.value.info &&
+            raResult.value.info.achievements.length > 0
+          ) {
+            managed = mergeRetroAchievements(managed, [], raResult.value.info).managed;
+          }
+          const checkboxes = managedToCheckboxItems(managed);
           const progressCheckboxes = getProgressCheckboxes(checkboxes);
           const progress = getProgress(game.slug);
           const index = buildCheckboxIndex(checkboxes);
@@ -231,6 +343,7 @@ async function buildGameCards(games: GameMeta[]): Promise<Map<string, GameCardDa
         slug: game.slug,
         name: game.name,
         mobyHtml,
+        moby,
         releaseDateSortKey,
         completedCount,
         totalCount,
@@ -321,21 +434,22 @@ function renderGameCard(card: GameCardData, signedIn: boolean): string {
     ? `<button type="button" class="btn-secondary" data-collections="${escapeHtml(card.slug)}">${iconLabel('collection', 'Collections')}</button>`
     : '';
 
-  return renderCollapsiblePanel({
-    title: card.name,
-    className: 'library-game-card',
-    content: `
-      <div class="flex flex-col gap-3">
-        ${card.mobyHtml}
-        ${renderCardStats(card)}
-        <div class="library-game-actions mt-auto">
-          <button type="button" class="btn-primary" data-view="${escapeHtml(card.slug)}">${iconLabel('eye', 'View')}</button>
-          ${editButton}
-          ${collectionsButton}
+  return `
+    <article class="panel library-game-card">
+      <h3 class="library-game-card-title">${escapeHtml(card.name)}</h3>
+      <div class="library-game-card-body">
+        <div class="flex flex-col gap-3">
+          ${card.mobyHtml}
+          ${renderCardStats(card)}
+          <div class="library-game-actions mt-auto">
+            <button type="button" class="btn-primary" data-view="${escapeHtml(card.slug)}">${iconLabel('eye', 'View')}</button>
+            ${editButton}
+            ${collectionsButton}
+          </div>
         </div>
       </div>
-    `,
-  });
+    </article>
+  `;
 }
 
 function renderGameGrid(
@@ -343,6 +457,7 @@ function renderGameGrid(
   cards: Map<string, GameCardData>,
   signedIn: boolean,
   emptyMessage: string,
+  searchQuery: string,
 ): string {
   const rendered = slugs
     .map((slug) => cards.get(slug))
@@ -350,7 +465,8 @@ function renderGameGrid(
     .map((card) => renderGameCard(card, signedIn));
 
   if (rendered.length === 0) {
-    return `<p class="text-faint text-sm">${escapeHtml(emptyMessage)}</p>`;
+    const message = searchQuery.trim() ? 'No games match your search.' : emptyMessage;
+    return `<p class="text-faint text-sm">${escapeHtml(message)}</p>`;
   }
 
   return `<div class="library-game-grid">${rendered.join('')}</div>`;
@@ -369,9 +485,15 @@ function renderCollectionSection(
   signedIn: boolean,
   state: CollectionsState,
   sortMeta: Map<string, GameSortMeta>,
+  searchQuery: string,
+  searchTargets: Map<string, LibrarySearchTarget>,
 ): string {
   const sortedSlugs = sortSlugsForSection(collection.gameSlugs, collection.id, sortMeta);
-  const count = sortedSlugs.length;
+  const visibleSlugs = filterVisibleSlugs(sortedSlugs, searchQuery, searchTargets);
+  if (searchQuery.trim() && visibleSlugs.length === 0) {
+    return '';
+  }
+
   const collapsed = isCollectionCollapsed(state, collection.id);
   const sortMode = getSectionSortMode(collection.id);
   const actions = signedIn
@@ -395,13 +517,23 @@ function renderCollectionSection(
     titleHtml: `
       ${renderCollectionThumb(collection)}
       <span class="library-collection-title">${escapeHtml(collection.name)}</span>
-      <span class="library-collection-count">${count}</span>
+      <span class="library-collection-count">${renderCollectionCount(
+        visibleSlugs.length,
+        sortedSlugs.length,
+        searchQuery,
+      )}</span>
     `,
     titleActions: `
       ${renderLibrarySortSelect(collection.id, sortMode)}
       ${actions}
     `,
-    content: `${description}${renderGameGrid(sortedSlugs, cards, signedIn, 'No games in this collection.')}`,
+    content: `${description}${renderGameGrid(
+      visibleSlugs,
+      cards,
+      signedIn,
+      'No games in this collection.',
+      searchQuery,
+    )}`,
   });
 }
 
@@ -411,10 +543,17 @@ function renderUncategorizedSection(
   signedIn: boolean,
   state: CollectionsState,
   sortMeta: Map<string, GameSortMeta>,
+  searchQuery: string,
+  searchTargets: Map<string, LibrarySearchTarget>,
 ): string {
   if (slugs.length === 0) return '';
 
   const sortedSlugs = sortSlugsForSection(slugs, UNCATEGORIZED_SECTION, sortMeta);
+  const visibleSlugs = filterVisibleSlugs(sortedSlugs, searchQuery, searchTargets);
+  if (searchQuery.trim() && visibleSlugs.length === 0) {
+    return '';
+  }
+
   const collapsed = isCollectionCollapsed(state, UNCATEGORIZED_SECTION);
   const sortMode = getSectionSortMode(UNCATEGORIZED_SECTION);
 
@@ -427,10 +566,20 @@ function renderUncategorizedSection(
     },
     titleHtml: `
       <span class="library-collection-title">Uncategorized</span>
-      <span class="library-collection-count">${sortedSlugs.length}</span>
+      <span class="library-collection-count">${renderCollectionCount(
+        visibleSlugs.length,
+        sortedSlugs.length,
+        searchQuery,
+      )}</span>
     `,
     titleActions: renderLibrarySortSelect(UNCATEGORIZED_SECTION, sortMode),
-    content: renderGameGrid(sortedSlugs, cards, signedIn, 'No uncategorized games.'),
+    content: renderGameGrid(
+      visibleSlugs,
+      cards,
+      signedIn,
+      'No uncategorized games.',
+      searchQuery,
+    ),
   });
 }
 
@@ -439,8 +588,10 @@ function renderCollectionsView(options: {
   cards: Map<string, GameCardData>;
   signedIn: boolean;
   state: CollectionsState;
+  searchQuery: string;
+  searchTargets: Map<string, LibrarySearchTarget>;
 }): string {
-  const { games, cards, signedIn, state } = options;
+  const { games, cards, signedIn, state, searchQuery, searchTargets } = options;
   const sortMeta = buildSortMeta(games, cards);
   const sortedCollections = sortCollections(state.collections, state.collectionSort);
   const uncategorizedSlugs = getUncategorizedSlugs(state, games);
@@ -451,7 +602,18 @@ function renderCollectionsView(options: {
       : '';
 
   const sections = sortedCollections
-    .map((collection) => renderCollectionSection(collection, cards, signedIn, state, sortMeta))
+    .map((collection) =>
+      renderCollectionSection(
+        collection,
+        cards,
+        signedIn,
+        state,
+        sortMeta,
+        searchQuery,
+        searchTargets,
+      ),
+    )
+    .filter(Boolean)
     .join('');
 
   const uncategorized = renderUncategorizedSection(
@@ -460,17 +622,32 @@ function renderCollectionsView(options: {
     signedIn,
     state,
     sortMeta,
+    searchQuery,
+    searchTargets,
   );
 
   if (state.collections.length === 0) {
+    const allSlugs = sortSlugsForSection(
+      games.map((game) => game.slug),
+      LIST_SORT_SECTION,
+      sortMeta,
+    );
+    const visibleSlugs = filterVisibleSlugs(allSlugs, searchQuery, searchTargets);
     return `
       ${
         signedIn
           ? '<p class="text-muted mb-4">No collections yet. Create one to group your games.</p>'
           : ''
       }
-      ${uncategorized || renderGameGrid(sortSlugsForSection(games.map((g) => g.slug), LIST_SORT_SECTION, sortMeta), cards, signedIn, 'No games yet.')}
+      ${
+        uncategorized ||
+        renderGameGrid(visibleSlugs, cards, signedIn, 'No games yet.', searchQuery)
+      }
     `;
+  }
+
+  if (searchQuery.trim() && !sections && !uncategorized) {
+    return `${controls}<p class="text-faint text-sm">No games match your search.</p>`;
   }
 
   return `
@@ -486,20 +663,23 @@ function renderListView(options: {
   games: GameMeta[];
   cards: Map<string, GameCardData>;
   signedIn: boolean;
+  searchQuery: string;
+  searchTargets: Map<string, LibrarySearchTarget>;
 }): string {
-  const { games, cards, signedIn } = options;
+  const { games, cards, signedIn, searchQuery, searchTargets } = options;
   const sortMeta = buildSortMeta(games, cards);
   const sortedSlugs = sortSlugsForSection(
     games.map((game) => game.slug),
     LIST_SORT_SECTION,
     sortMeta,
   );
+  const visibleSlugs = filterVisibleSlugs(sortedSlugs, searchQuery, searchTargets);
 
   return `
     <div class="library-controls">
       ${renderLibrarySortSelect(LIST_SORT_SECTION, getSectionSortMode(LIST_SORT_SECTION))}
     </div>
-    ${renderGameGrid(sortedSlugs, cards, signedIn, 'No games yet.')}
+    ${renderGameGrid(visibleSlugs, cards, signedIn, 'No games yet.', searchQuery)}
   `;
 }
 
@@ -508,6 +688,8 @@ function renderLibraryBody(options: {
   cards: Map<string, GameCardData>;
   signedIn: boolean;
   state: CollectionsState;
+  searchQuery: string;
+  searchTargets: Map<string, LibrarySearchTarget>;
 }): string {
   if (options.state.viewMode === 'list') {
     return renderListView(options);
@@ -545,8 +727,12 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
     }
 
     const cards = await buildGameCards(games);
+    const searchTargets = buildSearchTargets(games, cards);
+    let librarySearchQuery = '';
     let cleanupCollapsible = () => {};
     let cleanupImport = () => {};
+    let cleanupSearch = () => {};
+    let cleanupTabHelp = () => {};
 
     const collectionEditGames = () =>
       games.map((game) => ({ slug: game.slug, name: cards.get(game.slug)?.name ?? game.name }));
@@ -606,7 +792,11 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
       paint();
     };
 
-    const wireInteractions = () => {
+    const onAddCollection = () => {
+      void addCollection();
+    };
+
+    const wireCollapsibles = () => {
       cleanupCollapsible();
       cleanupCollapsible = wireCollapsiblePanels(container, {
         onToggle: (panel, expanded) => {
@@ -615,7 +805,23 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
           setCollapsed(collectionId, !expanded);
         },
       });
+    };
 
+    const updateLibraryBody = () => {
+      const libraryBody = container.querySelector('#library-body');
+      if (!libraryBody) return;
+      libraryBody.innerHTML = renderLibraryBody({
+        games,
+        cards,
+        signedIn,
+        state,
+        searchQuery: librarySearchQuery,
+        searchTargets,
+      });
+      wireInteractions();
+    };
+
+    const wireBodyInteractions = () => {
       const onCreate = () => navigate('/editor');
       container.querySelector('#create-game')?.removeEventListener('click', onCreate);
       container.querySelector('#create-game')?.addEventListener('click', onCreate);
@@ -647,9 +853,8 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
         button.addEventListener('click', handler);
       });
 
-      container.querySelector('#library-add-collection')?.addEventListener('click', () => {
-        void addCollection();
-      });
+      container.querySelector('#library-add-collection')?.removeEventListener('click', onAddCollection);
+      container.querySelector('#library-add-collection')?.addEventListener('click', onAddCollection);
 
       container.querySelectorAll('[data-edit-collection]').forEach((button) => {
         button.addEventListener('click', () => {
@@ -693,8 +898,69 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
       });
     };
 
+    const wireSearch = () => {
+      cleanupSearch();
+      const searchRoot = container.querySelector('.library-search') as HTMLElement | null;
+      if (!searchRoot) {
+        cleanupSearch = () => {};
+        return;
+      }
+
+      const input = searchRoot.querySelector('#library-search-input') as HTMLInputElement | null;
+      const clearButton = searchRoot.querySelector(
+        '[data-list-search-clear]',
+      ) as HTMLButtonElement | null;
+
+      const syncClearButton = () => {
+        if (!input || !clearButton) return;
+        const hasValue = input.value.length > 0;
+        clearButton.classList.toggle('hidden', !hasValue);
+        clearButton.tabIndex = hasValue ? 0 : -1;
+      };
+
+      const onInput = () => {
+        if (!input) return;
+        librarySearchQuery = input.value;
+        syncClearButton();
+        updateLibraryBody();
+      };
+
+      const onClear = () => {
+        if (!input) return;
+        input.value = '';
+        librarySearchQuery = '';
+        syncClearButton();
+        input.focus();
+        updateLibraryBody();
+      };
+
+      input?.addEventListener('input', onInput);
+      clearButton?.addEventListener('click', onClear);
+      syncClearButton();
+
+      cleanupSearch = () => {
+        input?.removeEventListener('input', onInput);
+        clearButton?.removeEventListener('click', onClear);
+      };
+    };
+
+    const wireInteractions = () => {
+      wireBodyInteractions();
+      wireCollapsibles();
+      wireSearch();
+      cleanupTabHelp();
+      cleanupTabHelp = wireEditorTabHelp(container);
+    };
+
     const paint = () => {
-      const body = renderLibraryBody({ games, cards, signedIn, state });
+      const body = renderLibraryBody({
+        games,
+        cards,
+        signedIn,
+        state,
+        searchQuery: librarySearchQuery,
+        searchTargets,
+      });
       const libraryBody = container.querySelector('#library-body');
       const viewToggleHost = container.querySelector('#library-view-toggle-host');
 
@@ -708,12 +974,17 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
       container.innerHTML = `
         <div class="app-shell">
           <header class="library-page-header">
-            <div class="library-page-header-intro">
-              <h1 class="page-heading mb-1">Game Library</h1>
-              <p class="text-muted">Pick a journal to track your completion progress.</p>
-              <div id="library-view-toggle-host" class="library-view-toggle-host">${renderViewToggle(state.viewMode)}</div>
+            <div class="library-page-header-row">
+              <div class="library-page-header-intro">
+                <h1 class="page-heading mb-1">Game Library</h1>
+                <p class="text-muted">Pick a journal to track your completion progress.</p>
+              </div>
+              <div class="library-page-header-controls">
+                <div id="library-view-toggle-host" class="library-view-toggle-host">${renderViewToggle(state.viewMode)}</div>
+                ${renderLibraryHeaderActions(signedIn)}
+              </div>
             </div>
-            ${renderLibraryHeaderActions(signedIn)}
+            ${renderLibrarySearch(librarySearchQuery, searchTargets)}
           </header>
           <div id="library-body">${body}</div>
         </div>
@@ -730,6 +1001,9 @@ export async function renderLibrary(container: HTMLElement): Promise<() => void>
     return () => {
       cleanupCollapsible();
       cleanupImport();
+      cleanupSearch();
+      cleanupTabHelp();
+      container.querySelector('#library-add-collection')?.removeEventListener('click', onAddCollection);
     };
   } catch (error) {
     container.innerHTML = `

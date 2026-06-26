@@ -1,8 +1,32 @@
 import { renderCollapsiblePanel } from './CollapsiblePanel.js';
 import { getPlatformIconSlug, getPlatformIconUrl } from '../platformIcons.js';
 import type { MobyGamesGameInfo, MobyGamesPlatformInfo } from '../types/index.js';
-import { parseReleaseDateSortKey } from '../utils/mobyReleaseDate.js';
+import { parseReleaseDateSortKey, getEarliestReleaseLabel } from '../utils/mobyReleaseDate.js';
 import { formatDescriptionHtml, descriptionToPlainText, truncatePlainText } from '../utils/sanitizeHtml.js';
+
+export interface LibraryMobyCardData {
+  coverUrl: string | null;
+  releaseDateLabel: string | null;
+  description: string | null;
+  genres: string[];
+  platforms: MobyGamesPlatformInfo[];
+  mobyScore: number | null;
+  numVotes: number | null;
+  title: string;
+}
+
+export function extractLibraryMobyCardData(info: MobyGamesGameInfo): LibraryMobyCardData {
+  return {
+    coverUrl: info.coverUrl,
+    releaseDateLabel: getEarliestReleaseLabel(info),
+    description: info.description ? descriptionToPlainText(info.description) : null,
+    genres: info.genres,
+    platforms: info.platforms,
+    mobyScore: info.mobyScore,
+    numVotes: info.numVotes,
+    title: info.title,
+  };
+}
 
 function escapeHtml(value: string): string {
   return value

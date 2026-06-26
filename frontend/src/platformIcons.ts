@@ -99,6 +99,33 @@ const PLATFORM_MATCHERS: Array<{ pattern: RegExp; slug: string }> = [
   { pattern: /arcade/i, slug: 'arcade' },
 ];
 
+export function getPlatformSearchSlug(platformName: string): string {
+  const slug = getPlatformIconSlug(platformName);
+  if (slug !== 'default') return slug;
+
+  const normalized = platformName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return normalized || 'unknown';
+}
+
+export function normalizePlatformSearchQuery(query: string): string {
+  const trimmed = query.trim().toLowerCase();
+  if (!trimmed) return '';
+
+  if ((KNOWN_PLATFORM_ICON_SLUGS as readonly string[]).includes(trimmed)) {
+    return trimmed;
+  }
+
+  const slug = getPlatformIconSlug(trimmed);
+  if (slug !== 'default') return slug;
+
+  return trimmed.replace(/\s+/g, '-');
+}
+
 export function getPlatformIconSlug(platformName: string): string {
   const normalized = platformName.trim().toLowerCase();
   if (PLATFORM_ICON_SLUGS[normalized]) {

@@ -1,14 +1,16 @@
 import {
+  deleteRetroAchievement,
   fetchRetroAchievementsForGame,
   fetchRetroAchievementsStatus,
   linkRetroAchievements,
   unlinkRetroAchievements,
 } from '../api/client.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from './CollapsiblePanel.js';
-import { iconLabel } from './icons.js';
+import { icon, iconLabel } from './icons.js';
 import {
   achievementCheckboxId,
   buildAchievementCheckboxes,
+  formatAchievementLabel,
 } from '../markdown/retroAchievements.js';
 import type { ManagedCheckbox, RetroAchievementsGameInfo } from '../types/index.js';
 
@@ -68,8 +70,20 @@ export function mountRetroAchievementsAdmin(
     });
   };
 
+  const pruneAchievementCheckboxes = (info: RetroAchievementsGameInfo) => {
+    const activeIds = new Set(
+      info.achievements.map((achievement) => achievementCheckboxId(achievement.id)),
+    );
+    for (const checkbox of hooks.getCheckboxes()) {
+      if (checkbox.id.startsWith('ra-') && !activeIds.has(checkbox.id)) {
+        hooks.removeCheckbox(checkbox.id);
+      }
+    }
+  };
+
   const syncAchievementCheckboxes = (info: RetroAchievementsGameInfo) => {
     hooks.ensureAchievementsProgressBar();
+    pruneAchievementCheckboxes(info);
     hooks.upsertCheckboxes(buildAchievementCheckboxes(info));
     hooks.onChanged();
   };
@@ -82,6 +96,37 @@ export function mountRetroAchievementsAdmin(
       hooks.removeCheckbox(id);
     }
     hooks.onChanged();
+  };
+
+  const renderAchievementList = (info: RetroAchievementsGameInfo): string => {
+    if (info.achievements.length === 0) {
+      return '<p class="text-faint text-sm">No achievements in this journal.</p>';
+    }
+
+    return `
+      <div class="ra-achievement-admin-list">
+        <p class="label mb-2">Achievements in journal</p>
+        <ul class="ra-achievement-admin-items">
+          ${info.achievements
+            .map(
+              (achievement) => `
+                <li class="ra-achievement-admin-item">
+                  <span class="ra-achievement-admin-label">${escapeHtml(formatAchievementLabel(achievement))}</span>
+                  <button
+                    type="button"
+                    class="btn-secondary ra-achievement-admin-delete"
+                    data-action="ra-delete-achievement"
+                    data-achievement-id="${achievement.id}"
+                    aria-label="Remove ${escapeHtml(achievement.title || `achievement ${achievement.id}`)}"
+                  >${icon('trash', 'ui-icon ui-icon-sm')}</button>
+                </li>
+              `,
+            )
+            .join('')}
+        </ul>
+        <p class="hint mt-2">Removed achievements stay hidden after refresh and are removed from the viewer.</p>
+      </div>
+    `;
   };
 
   const renderLinked = (info: RetroAchievementsGameInfo): string => `
@@ -110,6 +155,7 @@ export function mountRetroAchievementsAdmin(
         Achievements are added as checkboxes tagged with the <strong>Achievements</strong> progress bar and
         shown above the journal in the viewer. Embed any of them in the journal with the checkbox picker.
       </p>
+      ${renderAchievementList(info)}
     </div>
   `;
 
@@ -180,6 +226,27 @@ export function mountRetroAchievementsAdmin(
     }
   };
 
+  const onDeleteAchievement = async (achievementId: number) => {
+    const achievement = linkedInfo?.achievements.find((entry) => entry.id === achievementId);
+    const label = achievement?.title?.trim() || `achievement ${achievementId}`;
+    if (!window.confirm(`Remove "${label}" from this journal?`)) {
+      return;
+    }
+
+    setStatus('Removing achievement...');
+    try {
+      const info = await deleteRetroAchievement(slug, achievementId);
+      linkedInfo = info;
+      hooks.removeCheckbox(achievementCheckboxId(achievementId));
+      pruneAchievementCheckboxes(info);
+      hooks.onChanged();
+      render();
+      setStatus('Achievement removed.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to remove achievement');
+    }
+  };
+
   const onUnlink = async () => {
     if (!window.confirm('Unlink RetroAchievements? Achievement checkboxes will be removed.')) {
       return;
@@ -210,6 +277,13 @@ export function mountRetroAchievementsAdmin(
       case 'ra-unlink':
         void onUnlink();
         break;
+      case 'ra-delete-achievement': {
+        const achievementId = Number(target.dataset.achievementId);
+        if (Number.isInteger(achievementId) && achievementId > 0) {
+          void onDeleteAchievement(achievementId);
+        }
+        break;
+      }
     }
   };
 
@@ -229,6 +303,9 @@ export function mountRetroAchievementsAdmin(
       ]);
       configured = status.configured;
       linkedInfo = data.info;
+      if (linkedInfo) {
+        syncAchievementCheckboxes(linkedInfo);
+      }
       render();
     } catch {
       setStatus('Failed to load RetroAchievements settings.');
@@ -239,4 +316,4 @@ export function mountRetroAchievementsAdmin(
     cleanupCollapsible();
     host.removeEventListener('click', onClick);
   };
-}
+};

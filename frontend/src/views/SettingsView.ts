@@ -1,11 +1,13 @@
+import { downloadAllGamesExport, resetAccountData } from '../api/client.js';
 import { renderCollapsiblePanel, wireCollapsiblePanels } from '../components/CollapsiblePanel.js';
 import {
+  clearAllLocalData,
   describeBackupContents,
   downloadLocalDataBackup,
   exportLocalData,
   importLocalData,
 } from '../storage/backup.js';
-import { exportCollectionsFile, getCollections, importCollectionsFile } from '../storage/collections.js';
+import { isLocallyAuthenticated } from '../storage/auth.js';
 import {
   getHideImages,
   getThemeSettings,
@@ -114,6 +116,7 @@ function updateThemePreviewUi(container: HTMLElement, colors: ThemeColors): void
 export function renderSettings(container: HTMLElement): () => void {
   const hideImages = getHideImages();
   const initialTheme = getThemeSettings();
+  const signedIn = isLocallyAuthenticated();
 
   const displayContent = `
     <p class="text-muted text-sm">Control how journals and game pages show media.</p>
@@ -127,49 +130,73 @@ export function renderSettings(container: HTMLElement): () => void {
 
   const exportedKeys = Object.keys(exportLocalData().data);
   const backupContent = `
-    <p class="text-muted text-sm">
-      Download your browser-stored GameTrackr data or restore it on another device.
-      Backups include checkbox progress, playtime, notes, and theme.
-    </p>
-    ${
-      exportedKeys.length > 0
-        ? `<p class="hint mb-4">Current backup would include: ${describeBackupContents(exportedKeys)}.</p>`
-        : '<p class="hint mb-4">No local data saved yet.</p>'
-    }
-    <div class="backup-actions">
-      <button type="button" id="export-data" class="btn-primary">${iconLabel('download', 'Download backup')}</button>
-    </div>
-    <form id="import-data-form" class="backup-import mt-4 space-y-3">
-      <label class="block">
-        <span class="label">Import backup file</span>
-        <input type="file" id="import-data-file" class="input file-input" accept="application/json,.json" />
-      </label>
-      <div class="flex flex-wrap items-center gap-3">
-        <button type="submit" class="btn-secondary">${iconLabel('import', 'Import backup')}</button>
-        <span id="backup-status" class="text-muted text-sm"></span>
-      </div>
-    </form>
-
-    <div class="backup-collections">
-      <h3 class="text-sm font-medium">Collections only</h3>
+    <div class="backup-section">
+      <h3 class="settings-section-title">User data backup</h3>
       <p class="text-muted text-sm mt-1">
-        Export or import just your collection structure (names, descriptions, thumbnails, and membership).
-        Imports merge into your existing collections.
+        Download or restore browser-stored GameTrackr data on another device.
+        Includes checkbox progress, playtime, notes, collections, theme, and display preferences.
       </p>
-      <div class="backup-actions mt-3">
-        <button type="button" id="export-collections" class="btn-secondary">${iconLabel('download', 'Download collections')}</button>
+      ${
+        exportedKeys.length > 0
+          ? `<p class="hint mt-3 mb-4">Current backup would include: ${describeBackupContents(exportedKeys)}.</p>`
+          : '<p class="hint mt-3 mb-4">No local data saved yet.</p>'
+      }
+      <div class="backup-actions">
+        <button type="button" id="export-data" class="btn-primary">${iconLabel('download', 'Download backup')}</button>
       </div>
-      <form id="import-collections-form" class="backup-import mt-4 space-y-3">
+      <form id="import-data-form" class="backup-import mt-4 space-y-3">
         <label class="block">
-          <span class="label">Import collections file</span>
-          <input type="file" id="import-collections-file" class="input file-input" accept="application/json,.json" />
+          <span class="label">Import backup file</span>
+          <input type="file" id="import-data-file" class="input file-input" accept="application/json,.json" />
         </label>
         <div class="flex flex-wrap items-center gap-3">
-          <button type="submit" class="btn-secondary">${iconLabel('import', 'Import collections')}</button>
-          <span id="collections-status" class="text-muted text-sm"></span>
+          <button type="submit" class="btn-secondary">${iconLabel('import', 'Import backup')}</button>
+          <span id="backup-status" class="text-muted text-sm"></span>
         </div>
       </form>
     </div>
+    ${
+      signedIn
+        ? `
+      <div class="backup-section backup-games-export">
+        <h3 class="settings-section-title">All games export</h3>
+        <p class="text-muted text-sm mt-1">
+          Download every game journal on the server as individual <code>.gametrackr.json</code> files in a zip archive.
+        </p>
+        <div class="backup-actions mt-3">
+          <button type="button" id="export-all-games" class="btn-secondary">${iconLabel('download', 'Download all games')}</button>
+          <span id="games-export-status" class="text-muted text-sm"></span>
+        </div>
+      </div>
+      <div class="backup-section backup-reset">
+        <div class="backup-reset-warning panel border-red-500/40">
+          <h3 class="settings-section-title">Reset everything</h3>
+          <p class="text-muted text-sm mt-2">
+            Permanently delete all GameTrackr data tied to your account and this browser.
+            <strong class="text-strong">This cannot be undone.</strong>
+          </p>
+          <ul class="backup-reset-list hint text-sm mt-3">
+            <li>Every game journal stored on the server</li>
+            <li>Your cloud user-data backup</li>
+            <li>Local checkbox progress, playtime, notes, collections, and preferences on this device</li>
+          </ul>
+          <p class="hint text-sm mt-3">
+            Download a user data backup and an all-games export first if you want to keep anything.
+          </p>
+          <div class="backup-actions mt-4">
+            <button type="button" id="reset-account" class="btn-danger">${iconLabel('trash', 'Reset everything')}</button>
+            <span id="reset-status" class="text-muted text-sm"></span>
+          </div>
+        </div>
+      </div>
+    `
+        : `
+      <div class="backup-section backup-games-export">
+        <h3 class="settings-section-title">All games export</h3>
+        <p class="text-muted text-sm mt-1">Sign in to download a zip of every game journal on the server.</p>
+      </div>
+    `
+    }
   `;
 
   container.innerHTML = `
@@ -192,16 +219,10 @@ export function renderSettings(container: HTMLElement): () => void {
   const importFileInput = container.querySelector('#import-data-file') as HTMLInputElement;
   const backupStatus = container.querySelector('#backup-status') as HTMLElement;
   const exportButton = container.querySelector('#export-data') as HTMLButtonElement;
-  const exportCollectionsButton = container.querySelector(
-    '#export-collections',
-  ) as HTMLButtonElement;
-  const importCollectionsForm = container.querySelector(
-    '#import-collections-form',
-  ) as HTMLFormElement;
-  const importCollectionsFileInput = container.querySelector(
-    '#import-collections-file',
-  ) as HTMLInputElement;
-  const collectionsStatus = container.querySelector('#collections-status') as HTMLElement;
+  const exportAllGamesButton = container.querySelector('#export-all-games') as HTMLButtonElement | null;
+  const gamesExportStatus = container.querySelector('#games-export-status') as HTMLElement | null;
+  const resetAccountButton = container.querySelector('#reset-account') as HTMLButtonElement | null;
+  const resetStatus = container.querySelector('#reset-status') as HTMLElement | null;
 
   const onHideImagesChange = () => {
     const hide = hideImagesInput.checked;
@@ -298,39 +319,66 @@ export function renderSettings(container: HTMLElement): () => void {
     }
   };
 
-  const onExportCollections = () => {
-    const count = getCollections().collections.length;
-    if (count === 0) {
-      collectionsStatus.textContent = 'No collections to export yet.';
-      return;
-    }
-    exportCollectionsFile();
-    collectionsStatus.textContent = 'Collections downloaded.';
-    window.setTimeout(() => {
-      collectionsStatus.textContent = '';
-    }, 3000);
-  };
-
-  const onImportCollections = async (event: Event) => {
-    event.preventDefault();
-    collectionsStatus.textContent = '';
-
-    const file = importCollectionsFileInput.files?.[0];
-    if (!file) {
-      collectionsStatus.textContent = 'Choose a collections file first.';
-      return;
-    }
+  const onExportAllGames = async () => {
+    if (!gamesExportStatus || !exportAllGamesButton) return;
+    gamesExportStatus.textContent = '';
+    exportAllGamesButton.disabled = true;
 
     try {
-      const json = await file.text();
-      const state = importCollectionsFile(json, { merge: true });
-      collectionsStatus.textContent = `Imported. You now have ${state.collections.length} collection${
-        state.collections.length === 1 ? '' : 's'
-      }.`;
-      importCollectionsForm.reset();
+      await downloadAllGamesExport();
+      gamesExportStatus.textContent = 'All games downloaded.';
+      window.setTimeout(() => {
+        gamesExportStatus.textContent = '';
+      }, 3000);
     } catch (error) {
-      collectionsStatus.textContent =
-        error instanceof Error ? error.message : 'Failed to import collections.';
+      gamesExportStatus.textContent =
+        error instanceof Error ? error.message : 'Failed to export games.';
+    } finally {
+      exportAllGamesButton.disabled = false;
+    }
+  };
+
+  const onResetAccount = async () => {
+    if (!resetAccountButton || !resetStatus) return;
+
+    const confirmed = window.confirm(
+      [
+        'Reset everything?',
+        '',
+        'This will permanently delete:',
+        '• All game journals on the server',
+        '• Your cloud user-data backup',
+        '• All browser-stored progress, playtime, notes, collections, and preferences on this device',
+        '',
+        'This cannot be undone.',
+      ].join('\n'),
+    );
+    if (!confirmed) return;
+
+    const typed = window.prompt('Type RESET to confirm permanent deletion:');
+    if (typed !== 'RESET') {
+      resetStatus.textContent =
+        typed === null ? 'Reset cancelled.' : 'Reset cancelled. Type RESET exactly to confirm.';
+      return;
+    }
+
+    resetStatus.textContent = '';
+    resetAccountButton.disabled = true;
+
+    try {
+      const result = await resetAccountData();
+      clearAllLocalData();
+      resetStatus.textContent =
+        result.deletedGames > 0
+          ? `Reset complete. Removed ${result.deletedGames} game${result.deletedGames === 1 ? '' : 's'}. Reloading...`
+          : 'Reset complete. Reloading...';
+      window.setTimeout(() => {
+        window.location.assign('/');
+      }, 800);
+    } catch (error) {
+      resetStatus.textContent =
+        error instanceof Error ? error.message : 'Failed to reset account data.';
+      resetAccountButton.disabled = false;
     }
   };
 
@@ -343,8 +391,8 @@ export function renderSettings(container: HTMLElement): () => void {
   hideImagesInput.addEventListener('change', onHideImagesChange);
   exportButton.addEventListener('click', onExportData);
   importForm.addEventListener('submit', onImportData);
-  exportCollectionsButton.addEventListener('click', onExportCollections);
-  importCollectionsForm.addEventListener('submit', onImportCollections);
+  exportAllGamesButton?.addEventListener('click', onExportAllGames);
+  resetAccountButton?.addEventListener('click', onResetAccount);
 
   const cleanupCollapsible = wireCollapsiblePanels(container);
 
@@ -356,7 +404,7 @@ export function renderSettings(container: HTMLElement): () => void {
     exportButton.removeEventListener('click', onExportData);
     hideImagesInput.removeEventListener('change', onHideImagesChange);
     importForm.removeEventListener('submit', onImportData);
-    exportCollectionsButton.removeEventListener('click', onExportCollections);
-    importCollectionsForm.removeEventListener('submit', onImportCollections);
+    exportAllGamesButton?.removeEventListener('click', onExportAllGames);
+    resetAccountButton?.removeEventListener('click', onResetAccount);
   };
 }

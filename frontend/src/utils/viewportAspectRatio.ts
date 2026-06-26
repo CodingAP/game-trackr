@@ -44,13 +44,33 @@ export function wireViewportAspectRatio(
     return { cleanup: () => {}, refreshAspectRatio: () => {} };
   }
 
-  // Pixel aspect-ratio autofill only makes sense when both dimensions are in px.
-  // A percentage width is relative to the container width while a percentage
-  // height is relative to a different base, so the ratio cannot be preserved.
+  const readUnit = (selector?: string): string =>
+    selector ? (container.querySelector(selector) as HTMLSelectElement | null)?.value ?? 'px' : 'px';
+
+  const isPercentWidth = (): boolean => readUnit(options.widthUnitField) === '%';
+
+  // Percentage width stores a proportional box: sync the numeric width/height ratio.
+  // Pixel autofill requires both dimensions to use px.
   const unitsAllowSync = (): boolean => {
-    const readUnit = (selector?: string): string =>
-      selector ? (container.querySelector(selector) as HTMLSelectElement | null)?.value ?? 'px' : 'px';
+    if (isPercentWidth()) return true;
     return readUnit(options.widthUnitField) !== '%' && readUnit(options.heightUnitField) !== '%';
+  };
+
+  const syncPercentWidthMode = () => {
+    if (!isPercentWidth()) {
+      lockInput.disabled = false;
+      return;
+    }
+
+    lockInput.checked = true;
+    lockInput.disabled = true;
+
+    const heightUnitSelect = options.heightUnitField
+      ? (container.querySelector(options.heightUnitField) as HTMLSelectElement | null)
+      : null;
+    if (heightUnitSelect && heightUnitSelect.value !== '%') {
+      heightUnitSelect.value = '%';
+    }
   };
 
   let aspectRatio: number | null = null;
@@ -62,6 +82,8 @@ export function wireViewportAspectRatio(
     aspectRatio = nextRatio;
     return nextRatio;
   };
+
+  syncPercentWidthMode();
 
   if (lockInput.checked) {
     captureAspectRatio();
@@ -93,7 +115,16 @@ export function wireViewportAspectRatio(
     widthInput.value = String(Math.max(1, Math.round(height * aspectRatio)));
   };
 
+  const onWidthUnitChange = () => {
+    syncPercentWidthMode();
+    if (isPercentWidth()) {
+      captureAspectRatio();
+      syncHeightFromWidth();
+    }
+  };
+
   const onLockChange = () => {
+    if (isPercentWidth()) return;
     if (lockInput.checked) {
       if (!unitsAllowSync()) {
         aspectRatio = null;
@@ -115,9 +146,18 @@ export function wireViewportAspectRatio(
     }
   };
 
+  const widthUnitSelect = options.widthUnitField
+    ? (container.querySelector(options.widthUnitField) as HTMLSelectElement | null)
+    : null;
+  const heightUnitSelect = options.heightUnitField
+    ? (container.querySelector(options.heightUnitField) as HTMLSelectElement | null)
+    : null;
+
   lockInput.addEventListener('change', onLockChange);
   widthInput.addEventListener('input', syncHeightFromWidth);
   heightInput.addEventListener('input', syncWidthFromHeight);
+  widthUnitSelect?.addEventListener('change', onWidthUnitChange);
+  heightUnitSelect?.addEventListener('change', onWidthUnitChange);
 
   return {
     refreshAspectRatio: captureAspectRatio,
@@ -125,6 +165,8 @@ export function wireViewportAspectRatio(
       lockInput.removeEventListener('change', onLockChange);
       widthInput.removeEventListener('input', syncHeightFromWidth);
       heightInput.removeEventListener('input', syncWidthFromHeight);
+      widthUnitSelect?.removeEventListener('change', onWidthUnitChange);
+      heightUnitSelect?.removeEventListener('change', onWidthUnitChange);
     },
   };
 }

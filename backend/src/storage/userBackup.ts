@@ -52,6 +52,10 @@ function normalizeBackup(value: unknown): UserLocalDataBackup | null {
   };
 }
 
+export async function clearUserBackup(username: string): Promise<void> {
+  await fs.rm(backupPath(username), { force: true });
+}
+
 export async function readUserBackup(username: string): Promise<UserLocalDataBackup | null> {
   try {
     const raw = await fs.readFile(backupPath(username), 'utf8');

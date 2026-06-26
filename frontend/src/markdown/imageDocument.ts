@@ -229,11 +229,12 @@ export function readImageViewportOptions(form: HTMLElement): ParsedViewport | un
   const width = Number((form.querySelector('[data-field="width"]') as HTMLInputElement).value);
   const height = Number((form.querySelector('[data-field="height"]') as HTMLInputElement).value);
   const widthUnit = readViewportUnit(form, '[data-field="width-unit"]');
-  const heightUnit = readViewportUnit(form, '[data-field="height-unit"]');
+  const heightUnit = widthUnit === '%' ? '%' : readViewportUnit(form, '[data-field="height-unit"]');
   const scaleToFit = (form.querySelector('[data-field="scale"]') as HTMLInputElement).checked;
   const maintainAspectRatio =
-    (form.querySelector('[data-field="maintain-aspect"]') as HTMLInputElement | null)?.checked ??
-    false;
+    widthUnit === '%' ||
+    ((form.querySelector('[data-field="maintain-aspect"]') as HTMLInputElement | null)?.checked ??
+      false);
   const hasViewport = Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
   return hasViewport
     ? { width, height, widthUnit, heightUnit, scaleToFit, maintainAspectRatio }

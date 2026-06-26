@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { readOptionalAuth, requireAuth } from '../middleware/auth.js';
 import { createAuthToken, isAuthConfigured, verifyLogin } from '../services/auth.js';
-import { readUserBackup, writeUserBackup } from '../storage/userBackup.js';
+import { deleteAllGames } from '../storage/games.js';
+import { clearUserBackup, readUserBackup, writeUserBackup } from '../storage/userBackup.js';
 
 const router = Router();
 
@@ -77,6 +78,19 @@ router.put('/backup', requireAuth, async (req, res) => {
   });
 
   res.json({ backup: saved });
+});
+
+router.post('/reset', requireAuth, async (req, res) => {
+  const username = req.auth!.username;
+
+  try {
+    const deletedGames = await deleteAllGames();
+    await clearUserBackup(username);
+    res.json({ deletedGames });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to reset account data';
+    res.status(500).json({ error: message });
+  }
 });
 
 export default router;

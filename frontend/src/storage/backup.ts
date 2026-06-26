@@ -147,6 +147,15 @@ function applyImportedSideEffects(importedKeys: string[], replaceMissingKeys = f
   }
 }
 
+export function clearAllLocalData(): void {
+  for (const key of LOCAL_STORAGE_KEYS) {
+    localStorage.removeItem(key);
+  }
+
+  applyThemeSettings(getThemeSettings());
+  applyHideImages(getHideImages());
+}
+
 export function downloadLocalDataBackup(): void {
   const json = exportLocalDataJson();
   const blob = new Blob([json], { type: 'application/json' });

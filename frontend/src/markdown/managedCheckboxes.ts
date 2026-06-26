@@ -1,6 +1,7 @@
 import type { FullJournalData, ManagedCheckbox } from '../types/index.js';
 import type { CheckboxItem } from './checkboxes.js';
 import { buildCheckboxIndex } from './checkboxes.js';
+import { isAchievementCheckboxId } from './retroAchievements.js';
 
 export const MANAGED_CB_LINE = /^(\s*)- \[\[cb:([^\]]+)\]\]\s*(.*)$/;
 export const SLUG_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -73,7 +74,9 @@ export function managedToCheckboxItems(checkboxes: ManagedCheckbox[]): CheckboxI
       depth,
       parentId: cb.parentId,
       childIds: childIdsByParent.get(cb.id) ?? [],
-      countsTowardProgress: cb.parentId === null && !cb.excludeFromCompletion,
+      countsTowardProgress:
+        cb.parentId === null &&
+        (!cb.excludeFromCompletion || isAchievementCheckboxId(cb.id)),
     };
   });
 }

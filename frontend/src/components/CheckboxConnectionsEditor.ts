@@ -7,6 +7,7 @@ import {
 } from '../markdown/managedCheckboxes.js';
 import { parseBulkCheckboxImport } from '../markdown/checkboxBulkImport.js';
 import { findProgressBarByName } from '../markdown/progressBars.js';
+import { isAchievementCheckboxId } from '../markdown/retroAchievements.js';
 import { openCheckboxBulkImportDialog } from './CheckboxBulkImportDialog.js';
 import { icon, iconLabel } from './icons.js';
 import type {
@@ -149,7 +150,15 @@ function renderCheckboxDetailPanel(
       </label>
       ${
         checkbox.parentId === null
-          ? `
+          ? isAchievementCheckboxId(checkbox.id)
+            ? `
+            <label class="settings-check mb-3">
+              <input type="checkbox" checked disabled />
+              <span>Count toward overall completion</span>
+            </label>
+            <p class="hint mb-3">RetroAchievements always count toward overall completion.</p>
+          `
+            : `
             <label class="settings-check mb-3">
               <input
                 type="checkbox"
@@ -634,13 +643,19 @@ export function mountCheckboxConnectionsEditor(
 
   return {
     getData: () => ({
-      checkboxes: checkboxes.map((cb) => ({
-        ...cb,
-        id: cb.id.trim(),
-        label: cb.label.trim(),
-        parentId: cb.parentId,
-        tagIds: [...cb.tagIds],
-      })),
+      checkboxes: checkboxes.map((cb) => {
+        const next = {
+          ...cb,
+          id: cb.id.trim(),
+          label: cb.label.trim(),
+          parentId: cb.parentId,
+          tagIds: [...cb.tagIds],
+        };
+        if (isAchievementCheckboxId(next.id)) {
+          delete next.excludeFromCompletion;
+        }
+        return next;
+      }),
     }),
     addCheckbox: (checkbox: ManagedCheckbox) => {
       if (checkboxes.some((entry) => entry.id === checkbox.id)) return false;
@@ -672,16 +687,23 @@ export function mountCheckboxConnectionsEditor(
               changed = true;
             }
           }
+          if (isAchievementCheckboxId(existing.id) && existing.excludeFromCompletion) {
+            delete existing.excludeFromCompletion;
+            changed = true;
+          }
           continue;
         }
 
-        checkboxes.push({
+        const checkbox: ManagedCheckbox = {
           id: next.id,
           label: next.label,
           parentId: next.parentId,
           tagIds: [...next.tagIds],
-          excludeFromCompletion: next.excludeFromCompletion,
-        });
+        };
+        if (!isAchievementCheckboxId(checkbox.id) && next.excludeFromCompletion) {
+          checkbox.excludeFromCompletion = true;
+        }
+        checkboxes.push(checkbox);
         changed = true;
       }
 

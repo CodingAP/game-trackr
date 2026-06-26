@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { strToU8, zipSync } from 'fflate';
 import type {
   CheckboxConnectionsData,
   CompletionTagsData,
@@ -45,6 +46,31 @@ interface RetroAchievementsStore {
   linkedAt: string;
   cachedInfo?: RetroAchievementsGameInfo;
   cachedAt?: string;
+  excludedAchievementIds?: number[];
+}
+
+function getExcludedAchievementIds(store: RetroAchievementsStore): number[] {
+  if (!Array.isArray(store.excludedAchievementIds)) return [];
+  return store.excludedAchievementIds.filter((id) => Number.isInteger(id) && id > 0);
+}
+
+export function filterRetroAchievementsInfo(
+  info: RetroAchievementsGameInfo,
+  excludedIds: number[],
+): RetroAchievementsGameInfo {
+  if (excludedIds.length === 0) return info;
+  const excluded = new Set(excludedIds);
+  return {
+    ...info,
+    achievements: info.achievements.filter((achievement) => !excluded.has(achievement.id)),
+  };
+}
+
+function applyRetroAchievementExclusions(
+  store: RetroAchievementsStore,
+  info: RetroAchievementsGameInfo,
+): RetroAchievementsGameInfo {
+  return filterRetroAchievementsInfo(info, getExcludedAchievementIds(store));
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -698,6 +724,7 @@ export async function writeRetroAchievementsLink(
     linkedAt: now,
     cachedInfo: resolved,
     cachedAt: now,
+    excludedAchievementIds: [],
   });
   await touchGameUpdatedAt(slug);
   return resolved;
@@ -711,21 +738,47 @@ export async function readRetroAchievementsInfo(
   if (!store) return null;
 
   if (!options.refresh && store.cachedInfo && isRetroCacheFresh(store)) {
-    return store.cachedInfo;
+    return applyRetroAchievementExclusions(store, store.cachedInfo);
   }
 
   try {
     const info = await fetchRetroAchievementsGame(store.gameId);
-    await writeRetroAchievementsStore(slug, {
+    const nextStore: RetroAchievementsStore = {
       ...store,
       cachedInfo: info,
       cachedAt: new Date().toISOString(),
-    });
-    return info;
+    };
+    await writeRetroAchievementsStore(slug, nextStore);
+    return applyRetroAchievementExclusions(nextStore, info);
   } catch (error) {
-    if (store.cachedInfo) return store.cachedInfo;
+    if (store.cachedInfo) {
+      return applyRetroAchievementExclusions(store, store.cachedInfo);
+    }
     throw error;
   }
+}
+
+export async function excludeRetroAchievement(
+  slug: string,
+  achievementId: number,
+): Promise<RetroAchievementsGameInfo | null> {
+  const store = await readRetroAchievementsStore(slug);
+  if (!store?.cachedInfo) return null;
+
+  const exists = store.cachedInfo.achievements.some(
+    (achievement) => achievement.id === achievementId,
+  );
+  if (!exists) return null;
+
+  const excluded = new Set(getExcludedAchievementIds(store));
+  excluded.add(achievementId);
+  const nextStore: RetroAchievementsStore = {
+    ...store,
+    excludedAchievementIds: [...excluded],
+  };
+  await writeRetroAchievementsStore(slug, nextStore);
+  await touchGameUpdatedAt(slug);
+  return applyRetroAchievementExclusions(nextStore, store.cachedInfo);
 }
 
 export async function deleteRetroAchievementsLink(slug: string): Promise<void> {
@@ -749,6 +802,18 @@ export async function deleteGame(slug: string): Promise<void> {
     await writeGameIndex(next);
   });
   await fs.rm(gameDir(slug), { recursive: true, force: true });
+}
+
+export async function deleteAllGames(): Promise<number> {
+  let slugs: string[] = [];
+
+  await withIndexLock(async () => {
+    slugs = (await readGameIndex()).map((game) => game.slug);
+    await writeGameIndex([]);
+  });
+
+  await Promise.all(slugs.map((slug) => fs.rm(gameDir(slug), { recursive: true, force: true })));
+  return slugs.length;
 }
 
 async function copyDirectory(source: string, destination: string): Promise<void> {
@@ -880,6 +945,22 @@ export async function exportGameJournal(slug: string): Promise<JournalExportBund
     imageLibrary,
     images,
   };
+}
+
+export async function exportAllGamesArchive(): Promise<Uint8Array> {
+  const games = await readGameIndex();
+  if (games.length === 0) {
+    throw new Error('No games to export');
+  }
+
+  const files: Record<string, Uint8Array> = {};
+
+  for (const game of games) {
+    const bundle = await exportGameJournal(game.slug);
+    files[`${game.slug}.gametrackr.json`] = strToU8(JSON.stringify(bundle, null, 2));
+  }
+
+  return zipSync(files);
 }
 
 export async function importGameJournal(

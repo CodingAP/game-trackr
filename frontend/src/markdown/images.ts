@@ -44,18 +44,37 @@ export function parseViewportTitle(title: string | null | undefined): ParsedView
   };
 }
 
+export function formatViewportSizeLabel(
+  width: number,
+  height: number,
+  widthUnit: ViewportUnit = 'px',
+  heightUnit: ViewportUnit = 'px',
+): string {
+  const w = `${width}${widthUnit === '%' ? '%' : ''}`;
+  const h = `${height}${heightUnit === '%' ? '%' : ''}`;
+  return `${w}×${h}`;
+}
+
+function isPercentWidthViewport(widthUnit: ViewportUnit): boolean {
+  return widthUnit === '%';
+}
+
 export function formatImageEmbedTitle(options: {
   viewport?: ParsedViewport;
   centered?: boolean;
 }): string | undefined {
   if (options.viewport) {
+    const widthUnit = options.viewport.widthUnit ?? 'px';
+    const heightUnit = widthUnit === '%' ? '%' : (options.viewport.heightUnit ?? 'px');
+    const maintainAspectRatio =
+      isPercentWidthViewport(widthUnit) || Boolean(options.viewport.maintainAspectRatio);
     const base = formatViewportTitle(
       options.viewport.width,
       options.viewport.height,
       options.viewport.scaleToFit,
-      options.viewport.maintainAspectRatio ?? false,
-      options.viewport.widthUnit,
-      options.viewport.heightUnit,
+      maintainAspectRatio,
+      widthUnit,
+      heightUnit,
     );
     return options.centered ? `${base} center` : base;
   }
@@ -224,6 +243,7 @@ export function applyImageViewports(
         override.scaleToFit,
         override.widthUnit,
         override.heightUnit,
+        isPercentWidthViewport(override.widthUnit ?? 'px'),
       );
       viewport.dataset.customViewport = 'true';
     } else if (globalSettings.enabled) {
@@ -281,6 +301,8 @@ export function applyMediaViewports(
     viewport.style.maxWidth = '';
     viewport.style.maxHeight = '';
     viewport.style.width = '';
+    viewport.style.height = '';
+    viewport.style.aspectRatio = '';
     element.style.maxWidth = '';
     element.style.maxHeight = '';
     element.style.width = '';
@@ -290,12 +312,23 @@ export function applyMediaViewports(
     const height = override?.height ?? (globalSettings.enabled ? globalSettings.height : undefined);
     const widthUnit = override?.widthUnit ?? 'px';
     const heightUnit = override?.heightUnit ?? 'px';
+    const percentWidth = Boolean(width && height && widthUnit === '%');
 
     if (width && height) {
       viewport.classList.add('media-viewport-custom');
-      viewport.style.maxWidth = `${width}${widthUnit}`;
-      viewport.style.maxHeight = `${height}${heightUnit}`;
+      if (percentWidth) {
+        viewport.classList.add('media-viewport-percent');
+        viewport.style.width = `${width}%`;
+        viewport.style.maxWidth = `${width}%`;
+        viewport.style.aspectRatio = `${width} / ${height}`;
+        viewport.style.height = 'auto';
+        viewport.style.maxHeight = '';
+      } else {
+        viewport.style.maxWidth = `${width}${widthUnit}`;
+        viewport.style.maxHeight = `${height}${heightUnit}`;
+      }
       element.style.maxWidth = '100%';
+      element.style.width = percentWidth ? '100%' : '';
       element.style.height = 'auto';
       if (override) viewport.dataset.customViewport = 'true';
     } else {
@@ -352,6 +385,8 @@ function resetViewport(viewport: HTMLElement, img: HTMLImageElement): void {
   viewport.style.maxWidth = '';
   viewport.style.maxHeight = '';
   viewport.style.width = '';
+  viewport.style.height = '';
+  viewport.style.aspectRatio = '';
   img.style.maxWidth = '';
   img.style.maxHeight = '';
   img.style.width = '';
@@ -377,9 +412,35 @@ function applyCustomViewport(
   height: number,
   scaleToFit: boolean,
   widthUnit: ViewportUnit = 'px',
-  heightUnit: ViewportUnit = 'px',
+  _heightUnit: ViewportUnit = 'px',
+  percentWidth = false,
 ): void {
   viewport.classList.add('image-viewport-custom');
+
+  if (percentWidth) {
+    viewport.classList.add('image-viewport-percent');
+    viewport.style.width = `${width}%`;
+    viewport.style.maxWidth = `${width}%`;
+    viewport.style.aspectRatio = `${width} / ${height}`;
+    viewport.style.height = 'auto';
+    viewport.style.maxHeight = '';
+
+    if (scaleToFit) {
+      viewport.classList.add('image-viewport-scale');
+      img.classList.add('image-scaled');
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'contain';
+      return;
+    }
+
+    img.classList.add('image-natural');
+    img.style.width = '100%';
+    img.style.height = 'auto';
+    img.style.objectFit = '';
+    return;
+  }
+
   viewport.style.maxWidth = `${width}${widthUnit}`;
   viewport.style.maxHeight = `${height}${heightUnit}`;
 
