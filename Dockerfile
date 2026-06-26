@@ -10,6 +10,7 @@ RUN npm ci
 COPY frontend ./frontend
 COPY backend ./backend
 COPY public ./public
+COPY scripts ./scripts
 
 RUN npm run build
 
