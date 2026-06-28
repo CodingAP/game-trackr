@@ -880,10 +880,81 @@
     background-color: rgb(var(--editor-bg));
   }
 
-  .markdown-editor-toolbar {
-    @apply sticky top-20 z-10 flex flex-wrap gap-1 rounded-t-lg border-b p-2 backdrop-blur;
+  .markdown-editor-sticky {
+    @apply sticky top-20 z-10 rounded-t-lg border-b backdrop-blur;
     border-color: rgb(var(--border));
     background-color: rgb(var(--surface-muted) / 0.92);
+  }
+
+  .markdown-editor-toolbar {
+    @apply flex flex-wrap gap-1 p-2;
+  }
+
+  .markdown-editor-find-host.hidden {
+    display: none;
+  }
+
+  .markdown-editor-host .cm-panels:has(.markdown-find-replace-stub) {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+  }
+
+  .markdown-editor-host .markdown-find-replace-stub {
+    display: none !important;
+    height: 0 !important;
+    overflow: hidden;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+  }
+
+  .markdown-find-replace {
+    @apply flex flex-col gap-2 border-t px-2 py-2;
+    border-color: rgb(var(--border));
+  }
+
+  .markdown-find-replace-row {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .markdown-find-replace-field {
+    @apply min-w-[12rem] flex-1;
+  }
+
+  .markdown-find-replace-input {
+    @apply mt-0 min-h-9 py-1.5 text-sm;
+  }
+
+  .markdown-find-replace-actions {
+    @apply flex flex-wrap items-center gap-1;
+  }
+
+  .markdown-find-replace-btn {
+    @apply min-h-9 px-3 py-1.5 text-xs;
+  }
+
+  .markdown-find-replace-options {
+    @apply flex flex-wrap items-center gap-3 text-xs;
+    color: rgb(var(--text-muted));
+  }
+
+  .markdown-find-replace-option {
+    @apply inline-flex items-center gap-1.5;
+  }
+
+  .markdown-find-replace-close {
+    @apply ml-auto inline-flex min-h-9 min-w-9 items-center justify-center rounded-md transition-colors;
+    color: rgb(var(--text-muted));
+  }
+
+  .markdown-find-replace-close:hover {
+    background-color: rgb(var(--hover));
+    color: rgb(var(--text-heading));
   }
 
   .markdown-editor-host {

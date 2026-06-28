@@ -168,7 +168,10 @@ export function mountPagesEditor(
         persistActivePage();
         const name = `Page ${pages.length + 1}`;
         const id = uniquePageId(name, pages);
-        pages.push({ id, name, order: pages.length });
+        const activeIndex = pages.findIndex((entry) => entry.id === activePageId);
+        const insertAt = activeIndex >= 0 ? activeIndex + 1 : pages.length;
+        pages.splice(insertAt, 0, { id, name, order: insertAt });
+        pages = pages.map((entry, index) => ({ ...entry, order: index }));
         contents[id] = `# ${name}\n`;
         activePageId = id;
         editingPageId = null;

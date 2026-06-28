@@ -120,6 +120,8 @@ export const MARKDOWN_TOOLBAR_ICONS: Record<string, IconName> = {
   italic: 'italic',
   underline: 'underline',
   link: 'link',
+  'join-lines': 'list',
+  'find-replace': 'search',
   checkbox: 'checkbox',
   progress: 'progress',
   map: 'map',

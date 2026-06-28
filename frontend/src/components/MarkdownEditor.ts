@@ -11,6 +11,7 @@ import {
   markdown,
   markdownLanguage,
 } from '@codemirror/lang-markdown';
+import { search, searchKeymap } from '@codemirror/search';
 import {
   markdownEditorTheme,
   markdownSyntaxHighlighting,
@@ -36,6 +37,10 @@ import {
 import { parseCheckboxLine } from '../markdown/managedCheckboxes.js';
 import type { MarkdownEditorHandle } from '../types/markdownEditor.js';
 import { MARKDOWN_TOOLBAR_ICONS, icon } from './icons.js';
+import {
+  createSearchHighlightStub,
+  mountMarkdownFindReplace,
+} from './markdownFindReplacePanel.js';
 
 const continueMarkdownMarkup = insertNewlineContinueMarkupCommand({ nonTightLists: false });
 
@@ -78,6 +83,8 @@ type ToolbarAction =
   | 'italic'
   | 'underline'
   | 'link'
+  | 'join-lines'
+  | 'find-replace'
   | 'checkbox'
   | 'progress'
   | 'map'
@@ -97,6 +104,14 @@ const toolbarButtons: Array<{
   { action: 'italic', label: 'Italic', title: 'Italic', shortcut: 'Mod-i' },
   { action: 'underline', label: 'Underline', title: 'Underline', shortcut: 'Mod-u' },
   { action: 'link', label: 'Link', title: 'Link', shortcut: 'Mod-k' },
+  {
+    action: 'join-lines',
+    label: 'Join',
+    title: 'Join lines',
+    shortcut: 'Mod-Shift-j',
+    textLabel: true,
+  },
+  { action: 'find-replace', label: 'Find', title: 'Find and replace', shortcut: 'Mod-f' },
   { action: 'checkbox', label: 'Checkbox', title: 'Checkbox', shortcut: 'Mod-Shift-c' },
   { action: 'progress', label: 'Progress', title: 'Insert progress bar', shortcut: 'Mod-Shift-b' },
   { action: 'map', label: 'Map', title: 'Insert map', shortcut: 'Mod-Shift-m' },
@@ -181,6 +196,30 @@ function withLeadingIndent(lineText: string, content: string): string {
   return `${leadingWhitespace}${content}`;
 }
 
+function joinSelectedLines(text: string): string {
+  const lines = text.split(/\r?\n/);
+  return lines
+    .map((line, index) => (index === 0 ? line.trimEnd() : line.trim()))
+    .filter((line, index) => index === 0 || line.length > 0)
+    .join(' ');
+}
+
+function joinSelectedLinesInView(view: EditorView): boolean {
+  const { from, to } = view.state.selection.main;
+  if (from === to) return false;
+
+  const selected = view.state.sliceDoc(from, to);
+  if (!/[\r\n]/.test(selected)) return false;
+
+  const joined = joinSelectedLines(selected);
+  view.dispatch({
+    changes: { from, to, insert: joined },
+    selection: { anchor: from, head: from + joined.length },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
 function insertLineInView(
   view: EditorView,
   text: string,
@@ -234,6 +273,7 @@ function insertLineInView(
 }
 
 const PICKER_TOOLBAR_ACTIONS = new Set<ToolbarAction>(['checkbox', 'progress', 'map', 'image']);
+const SKIP_EDITOR_REFOLLOW_ACTIONS = new Set<ToolbarAction>(['find-replace']);
 
 function opensPicker(action: ToolbarAction): boolean {
   return PICKER_TOOLBAR_ACTIONS.has(action);
@@ -251,6 +291,7 @@ export function mountMarkdownEditor(
   let embedConfig: MarkdownEmbedConfig = {
     ...emptyMarkdownEmbedConfig,
   };
+  let findReplace: ReturnType<typeof mountMarkdownFindReplace> | null = null;
   const onEditEmbedRef = {
     current: options.onEditEmbed as MarkdownEmbedConfig['onEditEmbed'],
   };
@@ -303,6 +344,11 @@ export function mountMarkdownEditor(
         return true;
       case 'link':
         wrapSelectionInView(view, '[', '](https://)', 'link text');
+        return true;
+      case 'join-lines':
+        return joinSelectedLinesInView(view);
+      case 'find-replace':
+        findReplace?.open('find');
         return true;
       case 'checkbox':
         if (options.onOpenCheckboxPicker) {
@@ -360,6 +406,7 @@ export function mountMarkdownEditor(
       bind('Mod-i', 'italic'),
       bind('Mod-u', 'underline'),
       bind('Mod-k', 'link'),
+      bind('Mod-Shift-j', 'join-lines'),
       bind('Mod-Alt-1', 'h1'),
       bind('Mod-Alt-2', 'h2'),
       bind('Mod-Alt-3', 'h3'),
@@ -372,26 +419,30 @@ export function mountMarkdownEditor(
 
   container.innerHTML = `
     <div class="markdown-editor">
-      <div class="markdown-editor-toolbar" role="toolbar" aria-label="Markdown formatting">
-        ${toolbarButtons
-          .map((button) => {
-            const iconName = MARKDOWN_TOOLBAR_ICONS[button.action];
-            const content = button.textLabel
-              ? `<span class="markdown-toolbar-text">${button.label}</span>`
-              : icon(iconName, 'ui-icon ui-icon-md');
-            const title = toolbarTitle(button);
-            return `
-              <button type="button" class="markdown-toolbar-btn" data-action="${button.action}" title="${title}" aria-label="${title}">
-                ${content}
-              </button>
-            `;
-          })
-          .join('')}
+      <div class="markdown-editor-sticky">
+        <div class="markdown-editor-toolbar" role="toolbar" aria-label="Markdown formatting">
+          ${toolbarButtons
+            .map((button) => {
+              const iconName = MARKDOWN_TOOLBAR_ICONS[button.action];
+              const content = button.textLabel
+                ? `<span class="markdown-toolbar-text">${button.label}</span>`
+                : icon(iconName, 'ui-icon ui-icon-md');
+              const title = toolbarTitle(button);
+              return `
+                <button type="button" class="markdown-toolbar-btn" data-action="${button.action}" title="${title}" aria-label="${title}">
+                  ${content}
+                </button>
+              `;
+            })
+            .join('')}
+        </div>
+        <div class="markdown-editor-find-host" aria-live="polite"></div>
       </div>
       <div class="markdown-editor-host"></div>
     </div>
   `;
 
+  const findPanelHost = container.querySelector('.markdown-editor-find-host') as HTMLElement;
   const host = container.querySelector('.markdown-editor-host') as HTMLElement;
 
   view = new EditorView({
@@ -415,11 +466,34 @@ export function mountMarkdownEditor(
         markdown({ base: markdownLanguage, addKeymap: false }),
         markdownSyntaxHighlighting,
         markdownEditorTheme,
+        search({ top: true, createPanel: createSearchHighlightStub() }),
+        EditorView.darkTheme.of(true),
         EditorView.lineWrapping,
         Prec.highest(
           keymap.of([{ key: 'Enter', run: insertNewlineOnManagedCheckbox }]),
         ),
         Prec.high(keymap.of([{ key: 'Enter', run: continueMarkdownMarkup }])),
+        Prec.high(
+          keymap.of([
+            ...searchKeymap.filter((binding) => binding.key !== 'Mod-f'),
+            {
+              key: 'Mod-f',
+              run: () => {
+                findReplace?.open('find');
+                return true;
+              },
+              scope: 'editor search-panel',
+            },
+            {
+              key: 'Mod-h',
+              run: () => {
+                findReplace?.open('replace');
+                return true;
+              },
+              scope: 'editor search-panel',
+            },
+          ]),
+        ),
         keymap.of([
           ...buildMarkdownKeymap(),
           indentWithTab,
@@ -457,6 +531,8 @@ export function mountMarkdownEditor(
     effects: buildInitialEmbedFoldEffects(view.state),
     selection: view.state.selection,
   });
+
+  findReplace = mountMarkdownFindReplace(findPanelHost, view);
 
   const rememberSelection = () => {
     const main = view.state.selection.main;
@@ -574,7 +650,7 @@ export function mountMarkdownEditor(
       const handled = runMarkdownAction(action);
       if (!handled) return;
 
-      if (!opensPicker(action)) {
+      if (!opensPicker(action) && !SKIP_EDITOR_REFOLLOW_ACTIONS.has(action)) {
         clearPendingInsertSelection();
         view.focus();
       }

@@ -65,4 +65,10 @@ export const markdownEditorTheme = EditorView.theme({
     borderRadius: '0.25rem',
     padding: '0.0625rem 0.25rem',
   },
+  '.cm-searchMatch': {
+    backgroundColor: 'rgb(var(--accent) / 0.18)',
+  },
+  '.cm-searchMatch.cm-searchMatch-selected': {
+    backgroundColor: 'rgb(var(--accent) / 0.32)',
+  },
 });

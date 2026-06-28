@@ -4,7 +4,7 @@ import { icon } from './icons.js';
 const EDITOR_TAB_HELP: Record<EditorTabId, string> = {
   content: `
     <p><strong>Pages</strong> — Use the sidebar to switch journal pages. Click to edit; double-click a name to rename.</p>
-    <p><strong>Writing</strong> — Use the toolbar for headings, formatting, checkboxes, progress bars, maps, and media. Changes autosave.</p>
+    <p><strong>Writing</strong> — Use the toolbar for headings, formatting, checkboxes, progress bars, maps, and media. Select hard-wrapped text and use <strong>Join</strong> (⌘⇧J) to collapse line breaks into one line. Use <strong>Find</strong> (⌘F) or <strong>⌘H</strong> for find and replace in the current page. Changes autosave.</p>
     <p><strong>Viewer</strong> — Open the viewer to read the journal with live checkbox and progress tracking.</p>
   `,
   images: `
