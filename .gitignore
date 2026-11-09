@@ -1,16 +1,19 @@
+# Dependencies and build output
 node_modules/
 dist/
 backend/dist/
 public/js/
 public/css/
-.env
-*.log
+frontend/dist/
 
-# Runtime game data (user content, uploads, etc.)
-backend/data/games/
+# Local configuration (never commit real secrets or accounts)
+.env
 backend/data/accounts.json
+
+# Runtime data (game journals, uploads, per-user cloud sync)
+backend/data/games/
 backend/data/users/
 
-# Removed Vite frontend artifacts
-frontend/dist/
-frontend/node_modules/
+# Misc
+*.log
+.DS_Store

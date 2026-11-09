@@ -25,7 +25,15 @@ export interface UserLocalDataBackup {
 }
 
 function userDir(username: string): string {
-  return path.join(USERS_DIR, username);
+  // Usernames come from accounts.json, but never let one escape the users directory.
+  if (!username || /[\\/\0]/.test(username) || username === '.' || username === '..') {
+    throw new Error('Invalid username');
+  }
+  const dir = path.resolve(USERS_DIR, username);
+  if (path.dirname(dir) !== USERS_DIR) {
+    throw new Error('Invalid username');
+  }
+  return dir;
 }
 
 function backupPath(username: string): string {

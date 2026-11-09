@@ -1,7 +1,12 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { isAccountsConfigured, verifyAccountCredentials } from './accounts.js';
 
 const TOKEN_TTL_MS = 72 * 60 * 60 * 1000;
+
+// Fallback secret used only when AUTH_TOKEN_SECRET is not set. It is generated
+// fresh on every process start, so sessions are invalidated on restart. Set
+// AUTH_TOKEN_SECRET in production for stable sessions.
+let ephemeralTokenSecret: string | null = null;
 
 function base64UrlEncode(value: string): string {
   return Buffer.from(value, 'utf8').toString('base64url');
@@ -19,7 +24,13 @@ function getTokenSecret(): string {
   const configured = process.env.AUTH_TOKEN_SECRET?.trim();
   if (configured) return configured;
 
-  return createHmac('sha256', 'game-trackr-auth').update('dev-token-secret').digest('hex');
+  if (!ephemeralTokenSecret) {
+    ephemeralTokenSecret = randomBytes(32).toString('hex');
+    console.warn(
+      'Warning: AUTH_TOKEN_SECRET is not set. Using a random secret for this process; sessions will not survive a restart.',
+    );
+  }
+  return ephemeralTokenSecret;
 }
 
 export async function verifyLogin(
