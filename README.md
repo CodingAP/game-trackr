@@ -125,3 +125,7 @@ game-trackr/
 - `/editor/:slug` — Edit a game's pages, media, maps, checkboxes, progress bars, and metadata
 - `/viewer/:slug` and `/viewer/:slug/:page` — Read a journal and track completion
 - `/settings` — Theme, display settings, backup, export, and reset
+
+## License
+
+[MIT](LICENSE)

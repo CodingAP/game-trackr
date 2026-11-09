@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Self-hosted game completion tracker: markdown journals, checklists, progress bars, and maps for the games you play.",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "repository": {
     "type": "git",
